@@ -12,6 +12,7 @@ import copy
 def read_and_preprocess_data(path):
     data = pd.read_excel(path, engine='openpyxl', index_col=0)
     data.columns = pd.to_datetime(data.columns, format='%d/%m/%Y')
+    print("Data loaded with shape:", data.shape)
     return data
 
 def standardize_data(data_values):
@@ -26,6 +27,7 @@ class DynamicFactorModel:
         self.df_data = df_data
         self.num_factors = num_factors
         self.std_data = standardize_data(df_data.values.T).T
+        print("Standardized data shape:", self.std_data.shape)
         self.pca = PCA(n_components=num_factors)
         self.factors = None
         self.phi = None
@@ -34,11 +36,13 @@ class DynamicFactorModel:
 
     def apply_pca(self):
         self.factors = self.pca.fit_transform(self.std_data.T).T
+        print("PCA factors shape:", self.factors.shape)
 
     def yw_estimation(self):
         model = sm.tsa.VAR(self.factors.T)
         results = model.fit(1)
         self.phi = results.params
+        print("Yule-Walker estimation shape:", self.phi.shape)
 
     def enet_fit(self, data_train, fac_train):
         self.model_ena = ElasticNet()
@@ -47,6 +51,7 @@ class DynamicFactorModel:
         x_hat = self.model_ena.predict(fac_train)
         intercept = self.model_ena.intercept_
         r2_insample = r2_score(data_train, x_hat)
+        print("ElasticNet B_matrix shape:", self.B_mat.shape)
         return self.B_mat, r2_insample, intercept
 
     def enet_predict(self, fac_predict):
@@ -55,7 +60,16 @@ class DynamicFactorModel:
 
     def autoregression(self, data_train_reg, fac_train, beta_const):
         X = data_train_reg.T
-        Y = (self.std_data - np.dot(fac_train, self.B_mat.T) - beta_const).T
+        Y = (self.std_data.T - np.dot(fac_train, self.B_mat.T) - beta_const).T  # Adjusted for correct dimensions
+
+        # Verify the dimensions of X and Y
+        print("Shape of X:", X.shape)
+        print("Shape of Y:", Y.shape)
+
+        # Ensure X and Y have the same number of rows
+        if X.shape[0] != Y.shape[0]:
+            raise ValueError("The number of rows in X and Y must be the same")
+
         Y = np.matrix(Y)
         X = np.matrix(X)
         model = sm.OLS(Y, X)
@@ -88,42 +102,53 @@ class DynamicFactorModel:
         return np.array(factors_forecast)
 
 # Load and preprocess data
-FILE_PATH = r"C:\Users\mayac\OneDrive - ORTEC Finance\Thesis_OLD\03. Data\Final version data\Static.xlsx"
+FILE_PATH = r"C:\Thesis\03. Data\Final version data\Static.xlsx"
 df_data = read_and_preprocess_data(FILE_PATH)
 
-# Initialize model
-model = DynamicFactorModel(df_data, num_factors=3)
+model = DynamicFactorModel(df_data, num_factors=9)
 
-# Split data for training and validation
 DATE_VALIDATE = datetime.strptime('31/01/2010', '%d/%m/%Y')
 print("DATE_VALIDATE:", DATE_VALIDATE)
 
-# Find the index of the validation date
 if DATE_VALIDATE in df_data.columns:
     date_index = df_data.columns.get_loc(DATE_VALIDATE)
 else:
     raise ValueError(f"Date {DATE_VALIDATE} not found in dataframe columns")
 
-# Use the index to slice the data
 Y_train_PCA = df_data.iloc[:, :date_index]
-
-# Prepare data for individual model training
 
 REGRESSION_STEP = 12
 Y_train_other = Y_train_PCA.iloc[REGRESSION_STEP:,:]
 Y_reg_train = df_data.iloc[:, :date_index + 1 - REGRESSION_STEP]
 
-# Standardize filtered data
-Y_filtered_std = Y_train_other / Y_train_other.std()
-Y_reg_filtered_std = Y_reg_train / Y_reg_train.std()
+print("Y_train_other shape:", Y_train_other.shape)
+print("Y_reg_train shape:", Y_reg_train.shape)
 
-# Fit model
-B_matrix, C_matrix, r2_insample, beta_const = model.dfm_fit_pcayw(Y_filtered_std, Y_reg_filtered_std)
-print(f'R2 insample: {r2_insample}')
+Y_train_other_std = standardize_data(Y_train_other.values.T).T
+Y_reg_train_std = standardize_data(Y_reg_train.values.T).T
 
-# Predict and evaluate
-part_1 = pd.DataFrame(np.dot(model.factors.T, B_matrix.T), columns=Y_filtered_std.columns, index=Y_filtered_std.index)
-part_2 = pd.DataFrame(np.dot(Y_reg_filtered_std.values, C_matrix), columns=Y_filtered_std.columns, index=Y_filtered_std.index)
+print("Y_train_other_std shape:", Y_train_other_std.shape)
+print("Y_reg_train_std shape:", Y_reg_train_std.shape)
+
+# Apply PCA and Yule-Walker estimation on the standardized data
+model.std_data = Y_train_other_std.T  # Ensure the same data subset is used for PCA
+model.apply_pca()
+model.yw_estimation()
+
+# Check lengths of the data to be passed to ElasticNet
+print("Shape of Y_train_other_std:", Y_train_other_std.shape)
+print("Shape of model.factors.T:", model.factors.T.shape)
+
+if Y_train_other_std.shape[0] == model.factors.T.shape[0]:
+    B_matrix, C_matrix, r2_insample, beta_const = model.dfm_fit_pcayw(Y_train_other_std, Y_reg_train_std)
+    print(f'R2 insample: {r2_insample}')
+else:
+    print("Inconsistent lengths between Y_train_other_std and model.factors.T")
+    print("Y_train_other_std shape:", Y_train_other_std.shape)
+    print("model.factors.T shape:", model.factors.T.shape)
+    
+part_1 = pd.DataFrame(np.dot(model.factors.T, B_matrix.T), columns=Y_train_other.columns, index=Y_train_other.index)
+part_2 = pd.DataFrame(np.dot(Y_reg_train_std, C_matrix), columns=Y_train_other.columns, index=Y_train_other.index)
 Y_hat = (part_1 + part_2 + beta_const) * Y_train_other.std()
 
 RMSE_insample = RMSE(Y_train_other, Y_hat)
