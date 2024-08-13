@@ -1,16 +1,9 @@
-import statsmodels.api as sm
+from utils import RMSE
 
-def yw_estimation(factors):
-    """
-    Perform Yule-Walker estimation on the factors to fit a Vector Autoregression (VAR) model.
-
-    Parameters:
-    factors (np.ndarray): The principal components (factors) from PCA.
-
-    Returns:
-    np.ndarray: The estimated parameters from the Yule-Walker estimation.
-    """
-    model = sm.tsa.VAR(factors.T)
-    results = model.fit(1)
-    phi = results.params
-    return phi
+def train_and_evaluate_model(model, data_train, data_train_reg, data_validate, data_validate_reg):
+    B_matrix, C_matrix, r2_insample, beta_const = model.train(data_train, data_train_reg)
+    
+    predictions = model.predict(data_validate, data_validate_reg)
+    rmse_value = RMSE(data_validate.T, predictions)
+    
+    return B_matrix, C_matrix, r2_insample, beta_const, rmse_value

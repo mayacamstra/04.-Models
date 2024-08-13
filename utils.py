@@ -6,12 +6,12 @@ def standardize(variables):
     Standardize the variables by subtracting the mean and dividing by the standard deviation.
 
     Parameters:
-    variables (pd.DataFrame or np.ndarray): The data to standardize.
+    variables (np.ndarray or pd.DataFrame): The data to standardize.
 
     Returns:
-    pd.DataFrame or np.ndarray: The standardized data.
+    np.ndarray: The standardized data.
     """
-    central = variables - variables.mean()
+    central = (variables - variables.mean())
     return central / central.std()
 
 def RMSE(data: pd.DataFrame, estimation: pd.DataFrame):
@@ -23,8 +23,8 @@ def RMSE(data: pd.DataFrame, estimation: pd.DataFrame):
     estimation (pd.DataFrame): The estimated data.
 
     Returns:
-    pd.Series: The RMSE values for each variable.
+    np.ndarray: The RMSE values for each column.
     """
-    df_errors = estimation - data
+    df_errors = (estimation - data)
     df_rmse = ((df_errors) ** 2.0).mean(axis=0) ** 0.5
     return df_rmse

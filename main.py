@@ -1,71 +1,67 @@
 import pandas as pd
-import matplotlib.pyplot as plt
-from data_loader import load_data
-from utils import standardize, RMSE
-from factor_model import DynamicFactorModel
-from datetime import datetime
+from data_loader import load_data, load_combined_data, filter_data
+from utils import RMSE
+from individual_model import IndividualModel
+from train_model import train_and_evaluate_model
 
-# Load data
-file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
-df_data = load_data(file_path)
+def main(data_type='static', method='PCA', num_factors=9):
+    """
+    Main function to run the model on either the 'static' or 'combined' dataset.
 
-# Define number of factors
-num_factors = 9
+    Parameters:
+    data_type (str): Choose between 'static' or 'combined'.
+    method (str): Factor extraction method, either 'PCA' or 'PLS'.
+    num_factors (int): Number of factors to extract.
+    """
+    
+    if data_type == 'static':
+        file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
+        df_data = load_data(file_path)
+    elif data_type == 'combined':
+        static_file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
+        forward_file_path = 'C:/Thesis/03. Data/Final version data/Forward.xlsx'
+        df_data = load_combined_data(static_file_path, forward_file_path)
+    else:
+        raise ValueError("data_type must be 'static' or 'combined'")
+    
+    filtered_df = filter_data(df_data)
+    
+    # Model initialiseren
+    model = IndividualModel(filtered_df, num_factors=num_factors, method=method)
 
-# Initialize the model
-model = DynamicFactorModel(df_data, num_factors)
+    # Data splitsen voor training en validatie
+    DATE_VALIDATE = pd.Period('2020-01', freq='M')
+    date_index = filtered_df.columns.get_loc(DATE_VALIDATE)
 
-# Define validation date and split the data
-DATE_VALIDATE = pd.Period('2010-01', freq='M')
-if DATE_VALIDATE in df_data.columns:
-    date_index = df_data.columns.get_loc(DATE_VALIDATE)
-else:
-    raise ValueError(f"Date {DATE_VALIDATE} not found in the columns of the dataframe")
+    Y_train_PCA = filtered_df.iloc[:, :date_index]
+    REGRESSION_STEP = 12
+    Y_train_other = Y_train_PCA.iloc[:, REGRESSION_STEP:]
+    Y_reg_train = filtered_df.iloc[:, :date_index + 1 - REGRESSION_STEP]
 
-# Prepare training data
-Y_train_PCA = df_data.iloc[:, :date_index]
-REGRESSION_STEP = 12
-Y_train_other = Y_train_PCA.iloc[REGRESSION_STEP:, :]
-Y_reg_train = df_data.iloc[:, :date_index + 1 - REGRESSION_STEP]
+    # Model trainen en evalueren
+    B_matrix, C_matrix, r2_insample, beta_const, rmse_value = train_and_evaluate_model(
+        model, Y_train_other, Y_reg_train, Y_train_PCA.iloc[:, date_index:], Y_reg_train)
 
-Y_train_other_std = standardize(Y_train_other.values.T).T
-Y_reg_train_std = standardize(Y_reg_train.values.T).T
+    # RMSE resultaten voorbereiden voor export
+    if data_type == 'static':
+        variables_to_display = df_data.index[:66]
+        rmse_df = pd.DataFrame({'Variable': variables_to_display, 'RMSE': rmse_value[:66]})
+    else:  # combined
+        variables_to_display = df_data.index[:66]
+        rmse_df = pd.DataFrame({'Variable': variables_to_display, 'RMSE': rmse_value[:66]})
 
-# Fit the Dynamic Factor Model
-model.std_data = Y_train_other_std.T  # Ensure the same subset of data is used for PCA
-model.apply_pca()
-model.yw_estimation()
+    # Resultaten weergeven
+    print(rmse_df)
+    print(f"R2 in-sample: {r2_insample}")
+    print(f"ElasticNet intercept: {beta_const}")
 
-# Prepare training and validation data for ElasticNet
-data_train = Y_train_other_std[:, :int(Y_train_other_std.shape[1] * 0.8)].T
-fac_train = model.factors[:, :int(model.factors.shape[1] * 0.8)].T
+    # Opslaan van RMSE-resultaten naar Excel
+    output_filename = f'rmse_{data_type}_{method}.xlsx'
+    rmse_df.to_excel(output_filename, index=False)
+    print(f"RMSE resultaten opgeslagen in {output_filename}")
+print(filtered_df.columns)
 
-data_validate = Y_train_other_std[:, int(Y_train_other_std.shape[1] * 0.8):].T
-fac_validate = model.factors[:, int(model.factors.shape[1] * 0.8):].T
-
-B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
-
-# Validate model
-y_hat_validate = model.enet_predict(fac_validate)
-
-# Calculate RMSE for validation data
-rmse_value = RMSE(data_validate, y_hat_validate)
-
-# Plot RMSE values
-# plt.figure(figsize=(12, 6))
-# plt.bar(range(len(rmse_value)), rmse_value)
-# plt.xlabel('Variable Index')
-# plt.ylabel('RMSE')
-# plt.title('RMSE for Each Variable in the Validation Set')
-# plt.show()
-
-# Print RMSE values as a table
-rmse_table = pd.DataFrame({'Variable Index': range(len(rmse_value)), 'RMSE': rmse_value})
-print(rmse_table)
-
-# Print results
-print(f"RMSE: {rmse_value}")
-print(f"R2 in-sample: {r2_insample}")
-print(f"ElasticNet intercept: {intercept}")
-# Confirm the script has finished
-print("Script execution completed.")
+if __name__ == "__main__":
+    main(data_type='static', method='PCA')  # Pas deze parameters aan om het script te draaien voor verschillende scenario's
+    
+print(filtered_df.columns)
