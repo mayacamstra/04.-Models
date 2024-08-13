@@ -59,9 +59,7 @@ def main(data_type='static', method='PCA', num_factors=9):
     output_filename = f'rmse_{data_type}_{method}.xlsx'
     rmse_df.to_excel(output_filename, index=False)
     print(f"RMSE resultaten opgeslagen in {output_filename}")
-print(filtered_df.columns)
 
 if __name__ == "__main__":
     main(data_type='static', method='PCA')  # Pas deze parameters aan om het script te draaien voor verschillende scenario's
     
-print(filtered_df.columns)
