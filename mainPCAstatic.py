@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
 from utils import standardize, RMSE
 from factor_model import DynamicFactorModel
-from PCA_model import PCAModel
 from datetime import datetime
 
 # Load and filter data
@@ -24,11 +23,8 @@ variable_names = filtered_df.index.tolist()
 # Define number of factors
 num_factors = 9
 
-# Initialize the dynamic factor model (without PCA yet)
+# Initialize the dynamic factor model
 model = DynamicFactorModel(filtered_df, num_factors)
-
-# Initialize the PCA model
-pca_model = PCAModel(num_factors)
 
 # Define validation date and split the data
 DATE_VALIDATE = pd.Period('2020-01', freq='M')
@@ -45,9 +41,9 @@ Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 Y_train_std = standardize(Y_train_PCA.values.T).T
 Y_validate_std = standardize(Y_validate.values.T).T
 
-# Fit the PCA Model and apply the transformation
-model.std_data = Y_train_std.T  # Ensure the same subset of data is used for PCA
-model.factors = pca_model.fit_transform(model.std_data)  # Apply PCA and get factors
+# Fit the Dynamic Factor Model and apply PCA
+model.std_data = Y_train_std.T
+model.apply_pca()  # Apply the simpler PCA method
 
 # Print shape of factors to ensure it matches expectations
 print("Shape of PCA factors:", model.factors.shape)
@@ -62,7 +58,7 @@ data_train = Y_train_std[:, :train_split_index].T
 fac_train = model.factors[:, :train_split_index].T
 
 data_validate = Y_validate_std.T
-fac_validate = model.factors[:, train_split_index:].T
+fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Correctie toegepast
 
 # Print shapes to debug potential dimension mismatches
 print("Shape of data_train:", data_train.shape)

@@ -37,49 +37,59 @@ if DATE_VALIDATE in filtered_combined_df.columns:
 else:
     raise ValueError(f"Date {DATE_VALIDATE} not found in the columns of the dataframe")
 
-# Prepare training data
+# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months)
 Y_train_PCA = filtered_combined_df.iloc[:, :date_index]
-REGRESSION_STEP = 12
-Y_train_other = Y_train_PCA.iloc[:, REGRESSION_STEP:]
-Y_reg_train = filtered_combined_df.iloc[:, :date_index + 1 - REGRESSION_STEP]
+Y_validate = filtered_combined_df.iloc[:, date_index:date_index + 47]
 
-# Inspect the splits
-print("Shapes of the splits:")
-print("Y_train_PCA:", Y_train_PCA.shape)
-print("Y_train_other:", Y_train_other.shape)
-print("Y_reg_train:", Y_reg_train.shape)
+# Standardize the datasets
+Y_train_std = standardize(Y_train_PCA.values.T).T
+Y_validate_std = standardize(Y_validate.values.T).T
 
-Y_train_other_std = standardize(Y_train_other.values.T).T
-Y_reg_train_std = standardize(Y_reg_train.values.T).T
+# Fit the Dynamic Factor Model and apply PCA
+model.std_data = Y_train_std.T
+model.apply_pca()  # Apply the simpler PCA method
 
-# Fit the Dynamic Factor Model
-model.std_data = Y_train_other_std.T  # Ensure the same subset of data is used for PCA
-model.apply_pca()
+# Print shape of factors to ensure it matches expectations
+print("Shape of PCA factors:", model.factors.shape)
+
+# Estimate the Yule-Walker equations
 model.yw_estimation()
 
 # Prepare training and validation data for ElasticNet
 train_split_index = int(model.factors.shape[1] * 0.8)
 
-data_train = Y_train_other_std[:, :train_split_index].T
+data_train = Y_train_std[:, :train_split_index].T
 fac_train = model.factors[:, :train_split_index].T
 
-data_validate = Y_train_other_std[:, train_split_index:].T
-fac_validate = model.factors[:, train_split_index:].T
+data_validate = Y_validate_std.T
+fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Correctie toegepast
+
+# Print shapes to debug potential dimension mismatches
+print("Shape of data_train:", data_train.shape)
+print("Shape of fac_train:", fac_train.shape)
+print("Shape of data_validate:", data_validate.shape)
+print("Shape of fac_validate:", fac_validate.shape)
 
 B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
 # Validate model
 y_hat_validate = model.enet_predict(fac_validate)
 
+# Print shapes before RMSE calculation
+print("Shape of y_hat_validate:", y_hat_validate.shape)
+print("Shape of data_validate:", data_validate.shape)
+
 # Calculate RMSE for validation data using only the original 66 variables
-rmse_value = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
-
-# Ensure variable names match RMSE values length
-valid_variable_names = variable_names[:len(rmse_value)]
-
-# Create a DataFrame with RMSE values and variable names
-rmse_table = pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value})
-print(rmse_table)
+try:
+    rmse_value = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
+    # Ensure variable names match RMSE values length
+    valid_variable_names = variable_names[:len(rmse_value)]
+    # Create a DataFrame with RMSE values and variable names
+    rmse_table = pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value})
+    print(rmse_table)
+except ValueError as e:
+    print(f"RMSE calculation error: {e}")
+    print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
 
 # Print additional results
 print(f"R2 in-sample: {r2_insample}")
