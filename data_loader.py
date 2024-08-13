@@ -1,17 +1,20 @@
 import pandas as pd
 import numpy as np
-
+  
 def load_data(file_path):
     """
-    Load data from an Excel file.
+    Load data from an Excel file and convert the columns to monthly periods.
 
     Parameters:
     file_path (str): The path to the Excel file.
 
     Returns:
-    pd.DataFrame: The loaded data.
+    pd.DataFrame: The loaded data with monthly period columns.
     """
-    return pd.read_excel(file_path, engine='openpyxl', index_col=0)
+    df_data = pd.read_excel(file_path, engine='openpyxl', index_col=0)
+    # Convert columns to Period with monthly frequency
+    df_data.columns = pd.to_datetime(df_data.columns, format='%d/%m/%Y').to_period('M')
+    return df_data
 
 def filter_data(df_data):
     """
@@ -29,14 +32,14 @@ def filter_data(df_data):
 
 def load_combined_data(static_file_path, forward_file_path):
     """
-    Load and combine static and forward data from Excel files.
+    Load and combine static and forward data from Excel files, converting columns to monthly periods.
 
     Parameters:
     static_file_path (str): The path to the static data Excel file.
     forward_file_path (str): The path to the forward data Excel file.
 
     Returns:
-    pd.DataFrame: The combined data.
+    pd.DataFrame: The combined data with monthly period columns.
     """
     df_static = load_data(static_file_path)
     df_forward = load_data(forward_file_path)
