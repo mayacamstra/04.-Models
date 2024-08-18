@@ -33,7 +33,7 @@ if DATE_VALIDATE in filtered_df.columns:
 else:
     raise ValueError(f"Date {DATE_VALIDATE} not found in the columns of the dataframe")
 
-# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months)
+# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months) 
 Y_train_PCA = filtered_df.iloc[:, :date_index]
 Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 
