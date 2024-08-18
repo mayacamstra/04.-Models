@@ -7,9 +7,29 @@ class PLSModel:
         self.model = PLSRegression(n_components=num_factors)
         self.factors = None
 
-    def fit_transform(self, data):
-        self.factors, _ = self.model.fit_transform(data, np.zeros(data.shape[0]))
+    def fit_transform(self, X, Y):
+        """
+        Perform PLS regression and extract factors based on both X and Y.
+        
+        Parameters:
+        X (np.ndarray): The input data (independent variables).
+        Y (np.ndarray): The output data (dependent variables).
+
+        Returns:
+        np.ndarray: The latent factors.
+        """
+        # Perform PLS regression using both X and Y
+        self.factors, _ = self.model.fit_transform(X, Y)
         return self.factors
 
-    def transform(self, data):
-        return self.model.transform(data)
+    def transform(self, X):
+        """
+        Transform the input data X using the learned PLS model.
+        
+        Parameters:
+        X (np.ndarray): The input data (independent variables).
+
+        Returns:
+        np.ndarray: The transformed data.
+        """
+        return self.model.transform(X)

@@ -23,8 +23,8 @@ variable_names = filtered_df.index.tolist()
 # Define number of factors
 num_factors = 9
 
-# Initialize the dynamic factor model
-model = DynamicFactorModel(filtered_df, num_factors)
+# Initialize the dynamic factor model with PLS
+model = DynamicFactorModel(filtered_df, num_factors, method='PLS')
 
 # Define validation date and split the data
 DATE_VALIDATE = pd.Period('2020-01', freq='M')
@@ -33,7 +33,7 @@ if DATE_VALIDATE in filtered_df.columns:
 else:
     raise ValueError(f"Date {DATE_VALIDATE} not found in the columns of the dataframe")
 
-# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months) 
+# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months)
 Y_train_PCA = filtered_df.iloc[:, :date_index]
 Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 
@@ -41,12 +41,12 @@ Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 Y_train_std = standardize(Y_train_PCA.values.T).T
 Y_validate_std = standardize(Y_validate.values.T).T
 
-# Fit the Dynamic Factor Model and apply PCA
-model.std_data = Y_train_std.T
-model.apply_pca()  # Apply the simpler PCA method
+# Fit the Dynamic Factor Model and apply PLS
+model.std_data = Y_train_std.T  # Input (X)
+model.apply_pls(Y_train_std.T, Y_train_std.T)  # Using both X and Y for PLS
 
 # Print shape of factors to ensure it matches expectations
-print("Shape of PCA factors:", model.factors.shape)
+print("Shape of PLS factors:", model.factors.shape)
 
 # Estimate the Yule-Walker equations
 model.yw_estimation()
@@ -95,4 +95,4 @@ print(f"ElasticNet intercept: {intercept}")
 # Confirm the script has finished
 print("Script execution completed.")
 
-rmse_table.to_excel('rmse_static.xlsx', index=False)
+rmse_table.to_excel('rmse_static_pls.xlsx', index=False)
