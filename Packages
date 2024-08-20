@@ -1,8 +1,0 @@
-Als packages niet werken of je er een toevoegt:
-
-Ctrl + shift + P 
-Python: Create environment
-Venv
-Delete and recreate
-Python versie (3.12.4)
-Requirements.txt
