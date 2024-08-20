@@ -23,8 +23,8 @@ variable_names = filtered_df.index.tolist()
 # Define number of factors
 num_factors = 9
 
-# Initialize the dynamic factor model
-model = DynamicFactorModel(filtered_df, num_factors)
+# Initialize the dynamic factor model with PLS
+model = DynamicFactorModel(filtered_df, num_factors, method='PLS')
 
 # Define validation date and split the data
 DATE_VALIDATE = pd.Period('2020-01', freq='M')
@@ -33,7 +33,7 @@ if DATE_VALIDATE in filtered_df.columns:
 else:
     raise ValueError(f"Date {DATE_VALIDATE} not found in the columns of the dataframe")
 
-# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months) 
+# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months)
 Y_train_PCA = filtered_df.iloc[:, :date_index]
 Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 
@@ -41,12 +41,20 @@ Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 Y_train_std = standardize(Y_train_PCA.values.T).T
 Y_validate_std = standardize(Y_validate.values.T).T
 
-# Fit the Dynamic Factor Model and apply PCA
-model.std_data = Y_train_std.T
-model.apply_pca()  # Apply the simpler PCA method
+# Debug statements to check the shapes of X and Y before PLS
+print("Shape of Y_train_std (PLS Y):", Y_train_std.shape)  # Output Y (Static Data)
+print("Shape of X_train_std (PLS X):", model.std_data.shape)  # Input X (Static Data)
+
+# Fit the Dynamic Factor Model and apply PLS
+model.std_data = Y_train_std  # Input (X)
+model.apply_pls(Y_train_std, Y_train_std)  # Using both X and Y for PLS
 
 # Print shape of factors to ensure it matches expectations
-print("Shape of PCA factors:", model.factors.shape)
+print("Shape of PLS factors after fitting:", model.factors.shape)
+
+# Ensure that the validation set is correctly shaped
+fac_validate = model.transform(Y_validate_std)  # Transform validation set
+print("Shape of fac_validate (after PLS transform):", fac_validate.shape)
 
 # Estimate the Yule-Walker equations
 model.yw_estimation()
@@ -58,13 +66,13 @@ data_train = Y_train_std[:, :train_split_index].T
 fac_train = model.factors[:, :train_split_index].T
 
 data_validate = Y_validate_std.T
-fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Correctie toegepast
+#fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Correctie toegepast
 
 # Print shapes to debug potential dimension mismatches
-print("Shape of data_train:", data_train.shape)
-print("Shape of fac_train:", fac_train.shape)
-print("Shape of data_validate:", data_validate.shape)
-print("Shape of fac_validate:", fac_validate.shape)
+print("Shape of data_train (ElasticNet X train):", data_train.shape)
+print("Shape of fac_train (ElasticNet factors train):", fac_train.shape)
+print("Shape of data_validate (ElasticNet X validate):", data_validate.shape)
+print("Shape of fac_validate (ElasticNet factors validate):", fac_validate.shape)
 
 B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
@@ -95,4 +103,4 @@ print(f"ElasticNet intercept: {intercept}")
 # Confirm the script has finished
 print("Script execution completed.")
 
-rmse_table.to_excel('rmse_static.xlsx', index=False)
+rmse_table.to_excel('rmse_static_pls.xlsx', index=False)
