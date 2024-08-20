@@ -22,6 +22,7 @@ class DynamicFactorModel:
         if method == 'PCA':
             self.factor_extraction_func = self.apply_pca
         elif method == 'PLS':
+            self.pls_model = PLSModel(num_factors)
             self.factor_extraction_func = self.apply_pls
         else:
             raise ValueError("Method must be 'PCA' or 'PLS'")
@@ -43,9 +44,23 @@ class DynamicFactorModel:
         Returns:
         np.ndarray: The extracted factors.
         """
-        pls_model = PLSModel(self.num_factors)
-        self.factors = pls_model.fit_transform(X, Y)
+        self.factors = self.pls_model.fit_transform(X, Y)
         return self.factors
+    
+    def transform(self, X):
+        """
+        Transform the data using the fitted PLS model.
+
+        Parameters:
+        X (np.ndarray): Input data to transform using the fitted PLS model.
+        
+        Returns:
+        np.ndarray: The transformed data.
+        """
+        if self.method == 'PLS':
+            return self.pls_model.transform(X)
+        else:
+            raise ValueError("Transform method is only applicable when method='PLS'")
 
     def yw_estimation(self):
         """

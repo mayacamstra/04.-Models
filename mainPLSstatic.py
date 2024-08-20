@@ -13,7 +13,6 @@ df_data = load_data(file_path)
 filtered_df = filter_data(df_data)
 
 # Inspect the filtered data
-print(filtered_df.head())
 print(filtered_df.columns)
 print(filtered_df.shape)
 
@@ -52,21 +51,14 @@ model.apply_pls(Y_train_std, Y_train_std)  # Using both X and Y for PLS
 # Print shape of factors to ensure it matches expectations
 print("Shape of PLS factors after fitting:", model.factors.shape)
 
-# Ensure that the validation set is correctly shaped
-fac_validate = model.transform(Y_validate_std)  # Transform validation set
-print("Shape of fac_validate (after PLS transform):", fac_validate.shape)
-
-# Estimate the Yule-Walker equations
-model.yw_estimation()
-
 # Prepare training and validation data for ElasticNet
 train_split_index = int(model.factors.shape[1] * 0.8)
 
-data_train = Y_train_std[:, :train_split_index].T
-fac_train = model.factors[:, :train_split_index].T
+fac_train = model.factors[:, :train_split_index].T  # Now 9 factors
+fac_validate = model.factors[:, train_split_index:].T  # Matching number of factors
 
-data_validate = Y_validate_std.T
-#fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Correctie toegepast
+data_train = Y_train_std[:, :train_split_index].T  # This uses all variables (66)
+data_validate = Y_validate_std.T  # This is also based on the original variables
 
 # Print shapes to debug potential dimension mismatches
 print("Shape of data_train (ElasticNet X train):", data_train.shape)
@@ -74,7 +66,8 @@ print("Shape of fac_train (ElasticNet factors train):", fac_train.shape)
 print("Shape of data_validate (ElasticNet X validate):", data_validate.shape)
 print("Shape of fac_validate (ElasticNet factors validate):", fac_validate.shape)
 
-B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
+# Now train the ElasticNet on the factors instead of all variables
+B_matrix, r2_insample, intercept = model.enet_fit(fac_train, fac_train)  # Fit on factors
 
 # Validate model
 y_hat_validate = model.enet_predict(fac_validate)
@@ -103,4 +96,5 @@ print(f"ElasticNet intercept: {intercept}")
 # Confirm the script has finished
 print("Script execution completed.")
 
+# Save RMSE to an Excel file
 rmse_table.to_excel('rmse_static_pls.xlsx', index=False)
