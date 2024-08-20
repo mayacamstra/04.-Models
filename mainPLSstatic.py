@@ -98,3 +98,5 @@ print(f"ElasticNet intercept: {intercept}")
 
 # Confirm the script has finished
 print("Script execution completed.")
+
+print("ff testen")
