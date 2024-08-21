@@ -1,7 +1,14 @@
+import os
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
 from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood
 from factor_model import DynamicFactorModel
+
+# Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
+plot_dir = "plots_PCAstatic"
+os.makedirs(plot_dir, exist_ok=True)
 
 # Load and filter data
 file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
@@ -65,6 +72,10 @@ for num_factors in factor_range:
     # Validate model on out-of-sample data
     y_hat_validate = model.enet_predict(fac_validate)
 
+    # Calculate residuals
+    residuals_train = data_train - y_hat_train
+    residuals_validate = data_validate - y_hat_validate
+
     # Calculate RMSE and R² for validation data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
     rmse_value_out_sample = RMSE(data_validate, y_hat_validate)
@@ -90,10 +101,32 @@ for num_factors in factor_range:
         'BIC': bic_value
     })
 
+    # Plot residuals
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.scatter(y_hat_train.flatten(), residuals_train.flatten())
+    plt.title(f'Residuals vs Fitted (In-sample) - {num_factors} Factors')
+    plt.xlabel('Fitted values')
+    plt.ylabel('Residuals')
+    plt.axhline(0, color='red', linestyle='--')
+
+    plt.subplot(1, 2, 2)
+    plt.scatter(y_hat_validate.flatten(), residuals_validate.flatten())
+    plt.title(f'Residuals vs Fitted (Out-of-sample) - {num_factors} Factors')
+    plt.xlabel('Fitted values')
+    plt.ylabel('Residuals')
+    plt.axhline(0, color='red', linestyle='--')
+
+    plt.tight_layout()
+    
+    # Save the plot instead of showing it
+    plt.savefig(f"{plot_dir}/residuals_{num_factors}_factors.png")
+    plt.close()  # Close the figure to free up memory
+
 # Convert the results list to a DataFrame
 results_df = pd.DataFrame(results)
 
 # Save the results to an Excel file
-results_df.to_excel('results_PCAstatic_with_AIC_BIC_LogLikelihood.xlsx', index=False)
+results_df.to_excel('results_PCAstatic_with_AIC_BIC_LogLikelihood_Residuals.xlsx', index=False)
 
-print("Results saved to results_PCAstatic_with_AIC_BIC_LogLikelihood.xlsx")
+print("Results saved to results_PCAstatic_with_AIC_BIC_LogLikelihood_Residuals.xlsx")
