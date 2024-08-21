@@ -16,19 +16,8 @@ filtered_combined_df = filter_data(combined_df)
 # Separate static variables for RMSE calculation
 static_df = combined_df.loc[combined_df.index[:66]]
 
-# Inspect the filtered combined data
-print(filtered_combined_df.head())
-print(filtered_combined_df.columns)
-print(filtered_combined_df.shape)
-
 # Save variable names
 variable_names = static_df.index.tolist()
-
-# Define number of factors
-num_factors = 9
-
-# Initialize the model
-model = DynamicFactorModel(filtered_combined_df, num_factors)
 
 # Define validation date and split the data
 DATE_VALIDATE = pd.Period('2020-01', freq='M')
@@ -45,57 +34,50 @@ Y_validate = filtered_combined_df.iloc[:, date_index:date_index + 47]
 Y_train_std = standardize(Y_train_PCA.values.T).T
 Y_validate_std = standardize(Y_validate.values.T).T
 
-# Fit the Dynamic Factor Model and apply PCA
-model.std_data = Y_train_std.T
-model.apply_pca()  # Apply the simpler PCA method
+# Define the range of factors to test
+factor_range = range(5, 13)  # Example range from 5 to 12 factors
 
-# Print shape of factors to ensure it matches expectations
-print("Shape of PCA factors:", model.factors.shape)
+for num_factors in factor_range:
+    print(f"\nEvaluating model with {num_factors} factors")
 
-# Estimate the Yule-Walker equations
-model.yw_estimation()
+    # Initialize the dynamic factor model
+    model = DynamicFactorModel(filtered_combined_df, num_factors)
+    
+    # Fit the Dynamic Factor Model and apply PCA
+    model.std_data = Y_train_std.T
+    model.apply_pca()
 
-# Prepare training and validation data for ElasticNet
-train_split_index = int(model.factors.shape[1] * 0.8)
+    # Estimate the Yule-Walker equations
+    model.yw_estimation()
 
-data_train = Y_train_std[:, :train_split_index].T
-fac_train = model.factors[:, :train_split_index].T
+    # Prepare training and validation data for ElasticNet
+    train_split_index = int(model.factors.shape[1] * 0.8)
 
-data_validate = Y_validate_std.T
-fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Correctie toegepast
+    data_train = Y_train_std[:, :train_split_index].T
+    fac_train = model.factors[:, :train_split_index].T
 
-# Print shapes to debug potential dimension mismatches
-print("Shape of data_train:", data_train.shape)
-print("Shape of fac_train:", fac_train.shape)
-print("Shape of data_validate:", data_validate.shape)
-print("Shape of fac_validate:", fac_validate.shape)
+    data_validate = Y_validate_std.T
+    fac_validate = model.factors[:, train_split_index:train_split_index + 47].T
 
-B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
+    B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
-# Validate model
-y_hat_validate = model.enet_predict(fac_validate)
+    # Validate model
+    y_hat_validate = model.enet_predict(fac_validate)
 
-# Print shapes before RMSE calculation
-print("Shape of y_hat_validate:", y_hat_validate.shape)
-print("Shape of data_validate:", data_validate.shape)
+    # Calculate RMSE for validation data using only the original 66 variables
+    try:
+        rmse_value = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
+        # Ensure variable names match RMSE values length
+        valid_variable_names = variable_names[:len(rmse_value)]
+        # Print RMSE values
+        print(f"RMSE for {num_factors} factors:")
+        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value}))
+    except ValueError as e:
+        print(f"RMSE calculation error: {e}")
+        print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
 
-# Calculate RMSE for validation data using only the original 66 variables
-try:
-    rmse_value = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
-    # Ensure variable names match RMSE values length
-    valid_variable_names = variable_names[:len(rmse_value)]
-    # Create a DataFrame with RMSE values and variable names
-    rmse_table = pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value})
-    print(rmse_table)
-except ValueError as e:
-    print(f"RMSE calculation error: {e}")
-    print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
-
-# Print additional results
-print(f"R2 in-sample: {r2_insample}")
-print(f"ElasticNet intercept: {intercept}")
+    # Print additional results
+    print(f"R2 in-sample for {num_factors} factors: {r2_insample}")
 
 # Confirm the script has finished
 print("Script execution completed.")
-
-rmse_table.to_excel('rmse_combined.xlsx', index=False)

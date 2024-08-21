@@ -12,18 +12,8 @@ df_data = load_data(file_path)
 # Apply Christiano-Fitzgerald filter
 filtered_df = filter_data(df_data)
 
-# Inspect the filtered data
-print(filtered_df.columns)
-print(filtered_df.shape)
-
 # Save variable names
 variable_names = filtered_df.index.tolist()
-
-# Define number of factors
-num_factors = 9
-
-# Initialize the dynamic factor model with PLS method
-model = DynamicFactorModel(filtered_df, num_factors, method='PLS')
 
 # Define validation date and split the data
 DATE_VALIDATE = pd.Period('2020-01', freq='M')
@@ -32,7 +22,7 @@ if DATE_VALIDATE in filtered_df.columns:
 else:
     raise ValueError(f"Date {DATE_VALIDATE} not found in the columns of the dataframe")
 
-# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months) 
+# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months)
 Y_train_PLS = filtered_df.iloc[:, :date_index]
 Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 
@@ -40,63 +30,50 @@ Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 Y_train_std = standardize(Y_train_PLS.values.T).T
 Y_validate_std = standardize(Y_validate.values.T).T
 
-# Fit the Dynamic Factor Model and apply PLS
-model.std_data = Y_train_std.T
-model.apply_pls(Y_train_std.T, Y_train_std.T)  # Apply the PLS method
+# Define the range of factors to test
+factor_range = range(5, 13)  # Range from 5 to 12 factors
 
-# Transpose the factors to match the expected shape
-model.factors = model.factors.T  # Transpose to get (9, 300)
+for num_factors in factor_range:
+    print(f"\nEvaluating model with {num_factors} factors")
 
-# Ensure that the PLS factors have the correct shape
-print("Shape of PLS factors:", model.factors.shape)  # Expected shape: (9, 300)
+    # Initialize the dynamic factor model with PLS method
+    model = DynamicFactorModel(filtered_df, num_factors, method='PLS')
 
-# Prepare training and validation data for ElasticNet
-train_split_index = int(model.factors.shape[1] * 0.8)
+    # Fit the Dynamic Factor Model and apply PLS
+    model.std_data = Y_train_std.T
+    model.apply_pls(Y_train_std.T, Y_train_std.T)
 
-data_train = Y_train_std[:, :train_split_index].T
-fac_train = model.factors[:, :train_split_index].T  # Now should have shape (240, 9)
+    # Transpose the factors to match the expected shape
+    model.factors = model.factors.T  # Transpose to get (num_factors, 300)
 
-data_validate = Y_validate_std.T
-fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Shape should be (47, 9)
+    # Prepare training and validation data for ElasticNet
+    train_split_index = int(model.factors.shape[1] * 0.8)
 
-# Print shapes to debug potential dimension mismatches
-print("Shape of data_train:", data_train.shape)  # Expected shape: (240, 66)
-print("Shape of fac_train:", fac_train.shape)  # Expected shape: (240, 9)
-print("Shape of data_validate:", data_validate.shape)  # Expected shape: (47, 66)
-print("Shape of fac_validate:", fac_validate.shape)  # Expected shape: (47, 9)
+    data_train = Y_train_std[:, :train_split_index].T
+    fac_train = model.factors[:, :train_split_index].T
 
-B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
+    data_validate = Y_validate_std.T
+    fac_validate = model.factors[:, train_split_index:train_split_index + 47].T
 
-# Validate model
-y_hat_validate = model.enet_predict(fac_validate)
+    B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
-# Print shapes before RMSE calculation
-print("y_hat_validate content:\n", y_hat_validate)
-print("Shape of y_hat_validate:", y_hat_validate.shape)
-print("Shape of data_validate:", data_validate.shape)
+    # Validate model
+    y_hat_validate = model.enet_predict(fac_validate)
 
-# Calculate RMSE for validation data
-try:
-    rmse_value = RMSE(data_validate, y_hat_validate)
-    # Ensure variable names match RMSE values length
-    valid_variable_names = variable_names[:len(rmse_value)]
-    # Create a DataFrame with RMSE values and variable names
-    rmse_table = pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value})
-    print(rmse_table)
-except ValueError as e:
-    print(f"RMSE calculation error: {e}")
-    print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
-    rmse_table = None
+    # Calculate RMSE for validation data
+    try:
+        rmse_value = RMSE(data_validate, y_hat_validate)
+        # Ensure variable names match RMSE values length
+        valid_variable_names = variable_names[:len(rmse_value)]
+        # Print RMSE values
+        print(f"RMSE for {num_factors} factors:")
+        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value}))
+    except ValueError as e:
+        print(f"RMSE calculation error: {e}")
+        print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
 
-# Save RMSE table if available
-if rmse_table is not None:
-    rmse_table.to_excel('rmse_static_pls.xlsx', index=False)
-
-# Print additional results
-print(f"R2 in-sample: {r2_insample}")
-print(f"ElasticNet intercept: {intercept}")
+    # Print additional results
+    print(f"R2 in-sample for {num_factors} factors: {r2_insample}")
 
 # Confirm the script has finished
 print("Script execution completed.")
-
-print("ff testen")
