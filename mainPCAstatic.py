@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
-from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood
+from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model import DynamicFactorModel
 
 # Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
@@ -85,6 +85,10 @@ for num_factors in factor_range:
     log_like_value = log_likelihood(data_train, y_hat_train)
     aic_value, bic_value = calculate_aic_bic(y_hat_train, data_train, num_factors)
 
+    # Calculate adjusted R²
+    adj_r2_in_sample = adjusted_r2(r2_insample, data_train.shape[0], num_factors)
+    adj_r2_out_sample = adjusted_r2(r2_out_sample, data_validate.shape[0], num_factors)
+
     # Average RMSE values across variables
     avg_rmse_in_sample = rmse_value_in_sample.mean()
     avg_rmse_out_sample = rmse_value_out_sample.mean()
@@ -94,8 +98,10 @@ for num_factors in factor_range:
         'Num_Factors': num_factors,
         'RMSE_InSample': avg_rmse_in_sample,
         'R2_InSample': r2_insample,
+        'Adjusted_R2_InSample': adj_r2_in_sample,
         'RMSE_OutSample': avg_rmse_out_sample,
         'R2_OutSample': r2_out_sample,
+        'Adjusted_R2_OutSample': adj_r2_out_sample,
         'Log_Likelihood': log_like_value,
         'AIC': aic_value,
         'BIC': bic_value
@@ -127,6 +133,6 @@ for num_factors in factor_range:
 results_df = pd.DataFrame(results)
 
 # Save the results to an Excel file
-results_df.to_excel('results_PCAstatic_with_AIC_BIC_LogLikelihood_Residuals.xlsx', index=False)
+results_df.to_excel('results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx', index=False)
 
-print("Results saved to results_PCAstatic_with_AIC_BIC_LogLikelihood_Residuals.xlsx")
+print("Results saved to results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx")

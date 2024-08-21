@@ -79,3 +79,17 @@ def calculate_aic_bic(y_pred, y_true, num_params):
     aic = 2 * num_params - 2 * log_like
     bic = np.log(n) * num_params - 2 * log_like
     return aic, bic
+
+def adjusted_r2(r2, n, p):
+    """
+    Bereken de adjusted R² waarde.
+
+    Parameters:
+    r2 (float): De R² waarde.
+    n (int): Het aantal observaties.
+    p (int): Het aantal voorspellers (aantal factoren).
+
+    Returns:
+    float: De adjusted R² waarde.
+    """
+    return 1 - ((1 - r2) * (n - 1)) / (n - p - 1)
