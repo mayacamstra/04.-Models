@@ -28,3 +28,19 @@ def RMSE(data: pd.DataFrame, estimation: pd.DataFrame):
     df_errors = (estimation - data)
     df_rmse = ((df_errors) ** 2.0).mean(axis=0) ** 0.5
     return df_rmse
+
+def calculate_r2(data: pd.DataFrame, estimation: pd.DataFrame):
+    """
+    Calculate the R^2 (coefficient of determination) between the actual data and the estimation.
+
+    Parameters:
+    data (pd.DataFrame): The actual data.
+    estimation (pd.DataFrame): The estimated data.
+
+    Returns:
+    float: The R^2 value.
+    """
+    ss_res = ((data - estimation) ** 2).sum()
+    ss_tot = ((data - data.mean()) ** 2).sum()
+    r2 = 1 - (ss_res / ss_tot)
+    return r2

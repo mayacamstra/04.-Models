@@ -1,9 +1,7 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 from data_loader import load_combined_data, filter_data
-from utils import standardize, RMSE
+from utils import standardize, RMSE, calculate_r2
 from factor_model import DynamicFactorModel
-from datetime import datetime
 
 # Load and filter combined data
 static_file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
@@ -63,25 +61,36 @@ for num_factors in factor_range:
     data_validate = Y_validate_std.T
     fac_validate = model.factors[:, train_split_index:train_split_index + 47].T
 
+    # Fit ElasticNet model
     B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
-    # Validate model
+    # Validate model on in-sample data
+    y_hat_train = model.enet_predict(fac_train)
+
+    # Validate model on out-of-sample data
     y_hat_validate = model.enet_predict(fac_validate)
 
-    # Calculate RMSE for validation data using only the original 66 variables
+    # Calculate RMSE and R² for validation data using only the original 66 variables
     try:
-        rmse_value = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
+        rmse_value_in_sample = RMSE(data_train[:, :66], y_hat_train[:, :66])
+        rmse_value_out_sample = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
+        r2_out_sample = calculate_r2(data_validate[:, :66], y_hat_validate[:, :66])
+
         # Ensure variable names match RMSE values length
-        valid_variable_names = variable_names[:len(rmse_value)]
-        # Print RMSE values
-        print(f"RMSE for {num_factors} factors:")
-        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value}))
+        valid_variable_names = variable_names[:len(rmse_value_out_sample)]
+
+        # Print RMSE and R² values
+        print(f"RMSE (in-sample) for {num_factors} factors:")
+        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value_in_sample}))
+        print(f"R2 (in-sample) for {num_factors} factors: {r2_insample}")
+
+        print(f"RMSE (out-of-sample) for {num_factors} factors:")
+        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value_out_sample}))
+        print(f"R2 (out-of-sample) for {num_factors} factors: {r2_out_sample}")
+
     except ValueError as e:
         print(f"RMSE calculation error: {e}")
         print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
-
-    # Print additional results
-    print(f"R2 in-sample for {num_factors} factors: {r2_insample}")
 
 # Confirm the script has finished
 print("Script execution completed.")

@@ -1,6 +1,6 @@
 import pandas as pd
 from data_loader import load_data, filter_data
-from utils import standardize, RMSE
+from utils import standardize, RMSE, calculate_r2
 from factor_model import DynamicFactorModel
 
 # Load and filter data
@@ -56,18 +56,30 @@ for num_factors in factor_range:
     # Fit ElasticNet model
     B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
-    # Validate model
+    # Validate model on in-sample data
+    y_hat_train = model.enet_predict(fac_train)
+
+    # Validate model on out-of-sample data
     y_hat_validate = model.enet_predict(fac_validate)
 
-    # Calculate RMSE for validation data
+    # Calculate RMSE and R² for validation data
     try:
-        rmse_value = RMSE(data_validate, y_hat_validate)
+        rmse_value_in_sample = RMSE(data_train, y_hat_train)
+        rmse_value_out_sample = RMSE(data_validate, y_hat_validate)
+        r2_out_sample = calculate_r2(data_validate, y_hat_validate)
+        
         # Ensure variable names match RMSE values length
-        valid_variable_names = variable_names[:len(rmse_value)]
-        # Print RMSE and R2 values
-        print(f"RMSE for {num_factors} factors:")
-        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value}))
-        print(f"R2 in-sample for {num_factors} factors: {r2_insample}")
+        valid_variable_names = variable_names[:len(rmse_value_out_sample)]
+        
+        # Print RMSE and R² values
+        print(f"RMSE (in-sample) for {num_factors} factors:")
+        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value_in_sample}))
+        print(f"R2 (in-sample) for {num_factors} factors: {r2_insample}")
+
+        print(f"RMSE (out-of-sample) for {num_factors} factors:")
+        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value_out_sample}))
+        print(f"R2 (out-of-sample) for {num_factors} factors: {r2_out_sample}")
+
     except ValueError as e:
         print(f"RMSE calculation error: {e}")
         print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
