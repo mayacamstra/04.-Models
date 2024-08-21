@@ -35,6 +35,9 @@ Y_validate_std = standardize(Y_validate.values.T).T
 # Define the range of factors to test
 factor_range = range(5, 13)  # Example range from 5 to 12 factors
 
+# Initialize a list to store results
+results = []
+
 for num_factors in factor_range:
     print(f"\nEvaluating model with {num_factors} factors")
 
@@ -60,31 +63,34 @@ for num_factors in factor_range:
     # Fit ElasticNet model
     B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
-    # Validate model
+    # Validate model on in-sample data
+    y_hat_train = model.enet_predict(fac_train)
+
+    # Validate model on out-of-sample data
     y_hat_validate = model.enet_predict(fac_validate)
 
-    # Calculate RMSE for in-sample and out-of-sample data using only the original 66 variables
-    try:
-        rmse_in_sample = RMSE(data_train[:, :66], model.enet_predict(fac_train)[:, :66])
-        rmse_out_sample = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
+    # Calculate RMSE and R² for validation data using only the original 66 variables
+    rmse_value_in_sample = RMSE(data_train[:, :66], y_hat_train[:, :66])
+    rmse_value_out_sample = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
+    r2_out_sample = calculate_r2(data_validate[:, :66], y_hat_validate[:, :66])
 
-        r2_out_sample = calculate_r2(data_validate[:, :66], y_hat_validate[:, :66])
+    # Average RMSE values across variables
+    avg_rmse_in_sample = rmse_value_in_sample.mean()
+    avg_rmse_out_sample = rmse_value_out_sample.mean()
 
-        # Ensure variable names match RMSE values length
-        valid_variable_names = variable_names[:len(rmse_out_sample)]
+    # Append the results to the list
+    results.append({
+        'Num_Factors': num_factors,
+        'RMSE_InSample': avg_rmse_in_sample,
+        'R2_InSample': r2_insample,
+        'RMSE_OutSample': avg_rmse_out_sample,
+        'R2_OutSample': r2_out_sample
+    })
 
-        # Print RMSE and R2 values
-        print(f"RMSE (in-sample) for {num_factors} factors:")
-        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_in_sample}))
-        print(f"R2 (in-sample) for {num_factors} factors: {r2_insample}")
+# Convert the results list to a DataFrame
+results_df = pd.DataFrame(results)
 
-        print(f"RMSE (out-of-sample) for {num_factors} factors:")
-        print(pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_out_sample}))
-        print(f"R2 (out-of-sample) for {num_factors} factors: {r2_out_sample}")
+# Save the results to an Excel file
+results_df.to_excel('results_PCAcombined.xlsx', index=False)
 
-    except ValueError as e:
-        print(f"RMSE calculation error: {e}")
-        print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
-
-# Confirm the script has finished
-print("Script execution completed.")
+print("Results saved to results_PCAcombined.xlsx")
