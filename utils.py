@@ -45,10 +45,37 @@ def calculate_r2(data: pd.DataFrame, estimation: pd.DataFrame):
     r2 = 1 - (ss_res / ss_tot)
     return r2
 
-def calculate_aic_bic(y_hat, y_true, num_params):
+def log_likelihood(y_true, y_pred):
+    """
+    Bereken de log-likelihood voor een lineair model.
+
+    Parameters:
+    y_true (np.ndarray): De werkelijke waarden.
+    y_pred (np.ndarray): De voorspelde waarden.
+
+    Returns:
+    float: De log-likelihood waarde.
+    """
+    residuals = y_true - y_pred
     n = len(y_true)
-    residuals = y_true - y_hat
-    sse = np.sum(residuals**2)
-    aic = n * np.log(sse/n) + 2 * num_params
-    bic = n * np.log(sse/n) + num_params * np.log(n)
+    sigma2 = np.var(residuals)
+    log_like = -n/2 * (np.log(2 * np.pi * sigma2) + 1)
+    return log_like
+
+def calculate_aic_bic(y_pred, y_true, num_params):
+    """
+    Bereken AIC en BIC op basis van de log-likelihood.
+
+    Parameters:
+    y_pred (np.ndarray): De voorspelde waarden.
+    y_true (np.ndarray): De werkelijke waarden.
+    num_params (int): Het aantal parameters in het model.
+
+    Returns:
+    tuple: De AIC en BIC waarden.
+    """
+    log_like = log_likelihood(y_true, y_pred)
+    n = len(y_true)
+    aic = 2 * num_params - 2 * log_like
+    bic = np.log(n) * num_params - 2 * log_like
     return aic, bic

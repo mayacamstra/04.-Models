@@ -1,6 +1,6 @@
 import pandas as pd
 from data_loader import load_data, filter_data
-from utils import standardize, RMSE, calculate_r2, calculate_aic_bic
+from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood
 from factor_model import DynamicFactorModel
 
 # Load and filter data
@@ -70,7 +70,8 @@ for num_factors in factor_range:
     rmse_value_out_sample = RMSE(data_validate, y_hat_validate)
     r2_out_sample = calculate_r2(data_validate, y_hat_validate)
 
-    # Calculate AIC and BIC
+    # Calculate log-likelihood, AIC, and BIC
+    log_like_value = log_likelihood(data_train, y_hat_train)
     aic_value, bic_value = calculate_aic_bic(y_hat_train, data_train, num_factors)
 
     # Average RMSE values across variables
@@ -84,6 +85,7 @@ for num_factors in factor_range:
         'R2_InSample': r2_insample,
         'RMSE_OutSample': avg_rmse_out_sample,
         'R2_OutSample': r2_out_sample,
+        'Log_Likelihood': log_like_value,
         'AIC': aic_value,
         'BIC': bic_value
     })
@@ -92,6 +94,6 @@ for num_factors in factor_range:
 results_df = pd.DataFrame(results)
 
 # Save the results to an Excel file
-results_df.to_excel('results_PLSstatic_with_AIC_BIC.xlsx', index=False)
+results_df.to_excel('results_PLSstatic_with_AIC_BIC_LogLikelihood.xlsx', index=False)
 
-print("Results saved to results_PLSstatic_with_AIC_BIC.xlsx")
+print("Results saved to results_PLSstatic_with_AIC_BIC_LogLikelihood.xlsx")
