@@ -1,6 +1,6 @@
 import pandas as pd
 from data_loader import load_combined_data, filter_data
-from utils import standardize, RMSE, calculate_r2
+from utils import standardize, RMSE, calculate_r2, calculate_aic_bic
 from factor_model import DynamicFactorModel
 
 # Load and filter combined data
@@ -78,6 +78,9 @@ for num_factors in factor_range:
     rmse_value_out_sample = RMSE(data_validate[:, :66], y_hat_validate[:, :66])
     r2_out_sample = calculate_r2(data_validate[:, :66], y_hat_validate[:, :66])
 
+    # Calculate AIC and BIC
+    aic_value, bic_value = calculate_aic_bic(y_hat_train, data_train, num_factors)
+
     # Average RMSE values across variables
     avg_rmse_in_sample = rmse_value_in_sample.mean()
     avg_rmse_out_sample = rmse_value_out_sample.mean()
@@ -88,13 +91,15 @@ for num_factors in factor_range:
         'RMSE_InSample': avg_rmse_in_sample,
         'R2_InSample': r2_insample,
         'RMSE_OutSample': avg_rmse_out_sample,
-        'R2_OutSample': r2_out_sample
+        'R2_OutSample': r2_out_sample,
+        'AIC': aic_value,
+        'BIC': bic_value
     })
 
 # Convert the results list to a DataFrame
 results_df = pd.DataFrame(results)
 
 # Save the results to an Excel file
-results_df.to_excel('results_PLScombined.xlsx', index=False)
+results_df.to_excel('results_PLScombined_with_AIC_BIC.xlsx', index=False)
 
-print("Results saved to results_PLScombined.xlsx")
+print("Results saved to results_PLScombined_with_AIC_BIC.xlsx")

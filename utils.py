@@ -44,3 +44,11 @@ def calculate_r2(data: pd.DataFrame, estimation: pd.DataFrame):
     ss_tot = ((data - data.mean()) ** 2).sum()
     r2 = 1 - (ss_res / ss_tot)
     return r2
+
+def calculate_aic_bic(y_hat, y_true, num_params):
+    n = len(y_true)
+    residuals = y_true - y_hat
+    sse = np.sum(residuals**2)
+    aic = n * np.log(sse/n) + 2 * num_params
+    bic = n * np.log(sse/n) + num_params * np.log(n)
+    return aic, bic
