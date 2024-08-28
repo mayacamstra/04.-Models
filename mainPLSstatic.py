@@ -1,9 +1,14 @@
+import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
-from utils import standardize, RMSE
+from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model import DynamicFactorModel
-from datetime import datetime
+
+# Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
+plot_dir = "plots_PLSstatic"
+os.makedirs(plot_dir, exist_ok=True)
 
 # Load and filter data
 file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
@@ -12,18 +17,8 @@ df_data = load_data(file_path)
 # Apply Christiano-Fitzgerald filter
 filtered_df = filter_data(df_data)
 
-# Inspect the filtered data
-print(filtered_df.columns)
-print(filtered_df.shape)
-
 # Save variable names
 variable_names = filtered_df.index.tolist()
-
-# Define number of factors
-num_factors = 9
-
-# Initialize the dynamic factor model with PLS method
-model = DynamicFactorModel(filtered_df, num_factors, method='PLS')
 
 # Define validation date and split the data
 DATE_VALIDATE = pd.Period('2020-01', freq='M')
@@ -32,7 +27,7 @@ if DATE_VALIDATE in filtered_df.columns:
 else:
     raise ValueError(f"Date {DATE_VALIDATE} not found in the columns of the dataframe")
 
-# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months) 
+# Prepare training data until 2019-12, Validation from 2020-01 to 2023-11 (47 months)
 Y_train_PLS = filtered_df.iloc[:, :date_index]
 Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 
@@ -40,61 +35,104 @@ Y_validate = filtered_df.iloc[:, date_index:date_index + 47]
 Y_train_std = standardize(Y_train_PLS.values.T).T
 Y_validate_std = standardize(Y_validate.values.T).T
 
-# Fit the Dynamic Factor Model and apply PLS
-model.std_data = Y_train_std.T
-model.apply_pls(Y_train_std.T, Y_train_std.T)  # Apply the PLS method
+# Define the range of factors to test
+factor_range = range(5, 13)  # Range from 5 to 12 factors
 
-# Transpose the factors to match the expected shape
-model.factors = model.factors.T  # Transpose to get (9, 300)
+# Initialize a list to store results
+results = []
 
-# Ensure that the PLS factors have the correct shape
-print("Shape of PLS factors:", model.factors.shape)  # Expected shape: (9, 300)
+for num_factors in factor_range:
+    print(f"\nEvaluating model with {num_factors} factors")
 
-# Prepare training and validation data for ElasticNet
-train_split_index = int(model.factors.shape[1] * 0.8)
+    # Initialize the dynamic factor model with PLS method
+    model = DynamicFactorModel(filtered_df, num_factors, method='PLS')
 
-data_train = Y_train_std[:, :train_split_index].T
-fac_train = model.factors[:, :train_split_index].T  # Now should have shape (240, 9)
+    # Fit the Dynamic Factor Model and apply PLS
+    model.std_data = Y_train_std.T
+    model.apply_pls(Y_train_std.T, Y_train_std.T)
 
-data_validate = Y_validate_std.T
-fac_validate = model.factors[:, train_split_index:train_split_index + 47].T  # Shape should be (47, 9)
+    # Transpose the factors to match the expected shape
+    model.factors = model.factors.T  # Transpose to get (num_factors, 300)
 
-# Print shapes to debug potential dimension mismatches
-print("Shape of data_train:", data_train.shape)  # Expected shape: (240, 66)
-print("Shape of fac_train:", fac_train.shape)  # Expected shape: (240, 9)
-print("Shape of data_validate:", data_validate.shape)  # Expected shape: (47, 66)
-print("Shape of fac_validate:", fac_validate.shape)  # Expected shape: (47, 9)
+    # Prepare training and validation data for ElasticNet
+    train_split_index = int(model.factors.shape[1] * 0.8)
 
-B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
+    data_train = Y_train_std[:, :train_split_index].T
+    fac_train = model.factors[:, :train_split_index].T
 
-# Validate model
-y_hat_validate = model.enet_predict(fac_validate)
+    data_validate = Y_validate_std.T
+    fac_validate = model.factors[:, train_split_index:train_split_index + 47].T
 
-# Print shapes before RMSE calculation
-print("y_hat_validate content:\n", y_hat_validate)
-print("Shape of y_hat_validate:", y_hat_validate.shape)
-print("Shape of data_validate:", data_validate.shape)
+    # Fit ElasticNet model
+    B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
 
-# Calculate RMSE for validation data
-try:
-    rmse_value = RMSE(data_validate, y_hat_validate)
-    # Ensure variable names match RMSE values length
-    valid_variable_names = variable_names[:len(rmse_value)]
-    # Create a DataFrame with RMSE values and variable names
-    rmse_table = pd.DataFrame({'Variable': valid_variable_names, 'RMSE': rmse_value})
-    print(rmse_table)
-except ValueError as e:
-    print(f"RMSE calculation error: {e}")
-    print(f"Shape mismatch details - data_validate: {data_validate.shape}, y_hat_validate: {y_hat_validate.shape}")
-    rmse_table = None
+    # Validate model on in-sample data
+    y_hat_train = model.enet_predict(fac_train)
 
-# Save RMSE table if available
-if rmse_table is not None:
-    rmse_table.to_excel('rmse_static_pls.xlsx', index=False)
+    # Validate model on out-of-sample data
+    y_hat_validate = model.enet_predict(fac_validate)
 
-# Print additional results
-print(f"R2 in-sample: {r2_insample}")
-print(f"ElasticNet intercept: {intercept}")
+    # Calculate residuals
+    residuals_train = data_train - y_hat_train
+    residuals_validate = data_validate - y_hat_validate
 
-# Confirm the script has finished
-print("Script execution completed.")
+    # Calculate RMSE and R² for in-sample and out-of-sample data
+    rmse_value_in_sample = RMSE(data_train, y_hat_train)
+    rmse_value_out_sample = RMSE(data_validate, y_hat_validate)
+    r2_out_sample = calculate_r2(data_validate, y_hat_validate)
+
+    # Calculate log-likelihood, AIC, and BIC
+    log_like_value = log_likelihood(data_train, y_hat_train)
+    aic_value, bic_value = calculate_aic_bic(y_hat_train, data_train, num_factors)
+
+    # Calculate adjusted R²
+    adj_r2_in_sample = adjusted_r2(r2_insample, data_train.shape[0], num_factors)
+    adj_r2_out_sample = adjusted_r2(r2_out_sample, data_validate.shape[0], num_factors)
+
+    # Average RMSE values across variables
+    avg_rmse_in_sample = rmse_value_in_sample.mean()
+    avg_rmse_out_sample = rmse_value_out_sample.mean()
+
+    # Append the results to the list
+    results.append({
+        'Num_Factors': num_factors,
+        'RMSE_InSample': avg_rmse_in_sample,
+        'R2_InSample': r2_insample,
+        'Adjusted_R2_InSample': adj_r2_in_sample,
+        'RMSE_OutSample': avg_rmse_out_sample,
+        'R2_OutSample': r2_out_sample,
+        'Adjusted_R2_OutSample': adj_r2_out_sample,
+        'Log_Likelihood': log_like_value,
+        'AIC': aic_value,
+        'BIC': bic_value
+    })
+
+    # Plot residuals
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.scatter(y_hat_train.flatten(), residuals_train.flatten())
+    plt.title(f'Residuals vs Fitted (In-sample) - {num_factors} Factors')
+    plt.xlabel('Fitted values')
+    plt.ylabel('Residuals')
+    plt.axhline(0, color='red', linestyle='--')
+
+    plt.subplot(1, 2, 2)
+    plt.scatter(y_hat_validate.flatten(), residuals_validate.flatten())
+    plt.title(f'Residuals vs Fitted (Out-of-sample) - {num_factors} Factors')
+    plt.xlabel('Fitted values')
+    plt.ylabel('Residuals')
+    plt.axhline(0, color='red', linestyle='--')
+
+    plt.tight_layout()
+    
+    # Save the plot instead of showing it
+    plt.savefig(f"{plot_dir}/residuals_{num_factors}_factors.png")
+    plt.close()  # Close the figure to free up memory
+
+# Convert the results list to a DataFrame
+results_df = pd.DataFrame(results)
+
+# Save the results to an Excel file
+results_df.to_excel('results_PLSstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx', index=False)
+
+print("Results saved to results_PLSstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx")
