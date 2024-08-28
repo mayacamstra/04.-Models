@@ -37,6 +37,10 @@ factor_range = range(5, 13)  # Example range from 5 to 12 factors
 # Initialize a list to store results
 results = []
 
+# Initialize dictionaries to store predicted factors and variables matrices per number of factors
+predicted_factors_dict = {}
+predicted_variables_dict = {}
+
 for num_factors in factor_range:
     print(f"\nEvaluating model with {num_factors} factors")
 
@@ -75,17 +79,25 @@ for num_factors in factor_range:
     # Voorspel factoren voor de volgende tijdstempel na de laatste van de trainingsset
     next_timestamp = '2020-01'  # De volgende maand na de laatste trainingsmaand
     factor_forecast = model.factor_forecast(next_timestamp, scenarios=1)
-    
-    # Inspecteer de vorm van de voorspelde factoren
-    print(f"Shape of factor_forecast before transpose: {factor_forecast.shape}")
 
-    # Controleer dat de vorm van de voorspelde factoren klopt met wat het model verwacht
+    # Zorg ervoor dat de voorspelde factoren de juiste vorm hebben
     if factor_forecast.shape[1] != num_factors:
         raise ValueError(f"Expected {num_factors} features, got {factor_forecast.shape[1]} features")
 
+    # Voeg de voorspelde factoren toe aan de matrix in de dictionary
+    if num_factors not in predicted_factors_dict:
+        predicted_factors_dict[num_factors] = factor_forecast.T
+    else:
+        predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast.T))
+
     # Predict the original variables based on the forecasted factors
-    # Hier passen we .reshape(1, -1) toe om de vorm correct te maken
     predicted_variables_t1 = model.enet_predict(factor_forecast.reshape(1, -1))
+
+    # Voeg de voorspelde variabelen toe aan de matrix in de dictionary
+    if num_factors not in predicted_variables_dict:
+        predicted_variables_dict[num_factors] = predicted_variables_t1.T
+    else:
+        predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t1.T))
 
     print(f"Predicted variables for {next_timestamp}:\n", predicted_variables_t1)
 
@@ -142,10 +154,19 @@ for num_factors in factor_range:
     plt.savefig(f"{plot_dir}/residuals_{num_factors}_factors.png")
     plt.close()  # Close the figure to free up memory
 
-# Convert the results list to a DataFrame
+# Converteer de resultatenlijsten naar DataFrames voor eventuele verdere analyse of opslag
 results_df = pd.DataFrame(results)
 
 # Save the results to an Excel file
 results_df.to_excel('results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx', index=False)
 
+# Sla de voorspelde matrices op als Excel-bestanden voor elk aantal factoren
+for num_factors, matrix in predicted_factors_dict.items():
+    pd.DataFrame(matrix).to_excel(f'predicted_factors_matrix_{num_factors}.xlsx', index=False)
+    
+for num_factors, matrix in predicted_variables_dict.items():
+    pd.DataFrame(matrix).to_excel(f'predicted_variables_matrix_{num_factors}.xlsx', index=False)
+
+# Print feedback naar de gebruiker
 print("Results saved to results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx")
+print("Predicted factors and variables matrices saved to separate Excel files for each number of factors.")
