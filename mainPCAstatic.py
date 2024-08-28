@@ -13,8 +13,6 @@ os.makedirs(plot_dir, exist_ok=True)
 # Load and filter data
 file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
 df_data = load_data(file_path)
-
-# Apply Christiano-Fitzgerald filter
 filtered_df = filter_data(df_data)
 
 # Save variable names
@@ -73,6 +71,23 @@ for num_factors in factor_range:
     # Calculate residuals
     residuals_train = data_train - y_hat_train
     residuals_test = data_test - y_hat_test
+
+    # Voorspel factoren voor de volgende tijdstempel na de laatste van de trainingsset
+    next_timestamp = '2020-01'  # De volgende maand na de laatste trainingsmaand
+    factor_forecast = model.factor_forecast(next_timestamp, scenarios=1)
+    
+    # Inspecteer de vorm van de voorspelde factoren
+    print(f"Shape of factor_forecast before transpose: {factor_forecast.shape}")
+
+    # Controleer dat de vorm van de voorspelde factoren klopt met wat het model verwacht
+    if factor_forecast.shape[1] != num_factors:
+        raise ValueError(f"Expected {num_factors} features, got {factor_forecast.shape[1]} features")
+
+    # Predict the original variables based on the forecasted factors
+    # Hier passen we .reshape(1, -1) toe om de vorm correct te maken
+    predicted_variables_t1 = model.enet_predict(factor_forecast.reshape(1, -1))
+
+    print(f"Predicted variables for {next_timestamp}:\n", predicted_variables_t1)
 
     # Calculate RMSE and R² for in-sample and test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
