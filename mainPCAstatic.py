@@ -101,6 +101,26 @@ for num_factors in factor_range:
 
     print(f"Predicted variables for {next_timestamp}:\n", predicted_variables_t1)
 
+    # Voorspel factoren voor de tweede tijdstempel na de laatste van de trainingsset
+    next_timestamp_2 = pd.Period(next_timestamp, freq='M') + 1
+    next_timestamp_2_str = next_timestamp_2.strftime('%Y-%m')
+    factor_forecast_2 = model.factor_forecast(next_timestamp_2_str, scenarios=1)
+
+    # Zorg ervoor dat de voorspelde factoren de juiste vorm hebben
+    if factor_forecast_2.shape[1] != num_factors:
+        raise ValueError(f"Expected {num_factors} features, got {factor_forecast_2.shape[1]} features")
+
+    # Voeg de voorspelde factoren voor t+2 toe aan de matrix in de dictionary
+    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_2.T))
+
+    # Predict the original variables based on the forecasted factors for t+2
+    predicted_variables_t2 = model.enet_predict(factor_forecast_2.reshape(1, -1))
+
+    # Voeg de voorspelde variabelen voor t+2 toe aan de matrix in de dictionary
+    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t2.T))
+
+    print(f"Predicted variables for {next_timestamp_2_str}:\n", predicted_variables_t2)
+
     # Calculate RMSE and R² for in-sample and test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
     rmse_value_test_sample = RMSE(data_test, y_hat_test)
