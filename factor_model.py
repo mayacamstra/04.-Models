@@ -130,7 +130,7 @@ class DynamicFactorModel:
         """
         Forecast future factors based on the estimated Yule-Walker parameters.
         """
-        future_date = pd.to_datetime(future_date, format='%d/%m/%Y').to_period('M')
+        future_date = pd.to_datetime(future_date, format='%Y-%m').to_period('M')
         current_date = self.df_data.columns[-1]
         if future_date <= current_date:
             raise ValueError("The future date must be later than the last date in the data.")
