@@ -74,7 +74,7 @@ for num_factors in factor_range:
         predicted_variables_dict[num_factors] = predicted_variables_t1.T
     else:
         predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t1.T))
-    print(f"Predicted variables for {next_timestamp}:\n", predicted_variables_t1)
+    # print(f"Predicted variables for {next_timestamp}:\n", predicted_variables_t1)
     # Voeg de voorspelde waarden voor 't+1' toe aan de trainingsdata
     extended_train_data = np.hstack((Y_train_std, predicted_variables_t1.T))
     # Standaardiseer opnieuw de uitgebreide dataset
@@ -113,7 +113,7 @@ for num_factors in factor_range:
     # Voeg de voorspelde variabelen voor t+2 toe aan de matrix in de dictionary
     predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t2.T))
 
-    print(f"Predicted variables for {next_timestamp_2_str}:\n", predicted_variables_t2)
+    # print(f"Predicted variables for {next_timestamp_2_str}:\n", predicted_variables_t2)
 
     # Voeg de voorspelde waarden voor 't+2' toe aan de trainingsdata
     extended_train_data_2 = np.hstack((extended_train_data, predicted_variables_t2.T))
@@ -165,7 +165,7 @@ for num_factors in factor_range:
     # Voeg de voorspelde variabelen voor t+3 toe aan de matrix in de dictionary
     predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t3.T))
 
-    print(f"Predicted variables for {next_timestamp_3_str}:\n", predicted_variables_t3)
+    # print(f"Predicted variables for {next_timestamp_3_str}:\n", predicted_variables_t3)
 
     # Voeg de voorspelde waarden voor 't+3' toe aan de trainingsdata
     extended_train_data_3 = np.hstack((extended_train_data, predicted_variables_t3.T))
@@ -217,7 +217,32 @@ for num_factors in factor_range:
     # Voeg de voorspelde variabelen voor t+4 toe aan de matrix in de dictionary
     predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t4.T))
 
-    print(f"Predicted variables for {next_timestamp_4_str}:\n", predicted_variables_t4)
+    # print(f"Predicted variables for {next_timestamp_4_str}:\n", predicted_variables_t4)
+    
+	# Voeg de voorspelde waarden voor 't+4' toe aan de trainingsdata
+    extended_train_data_4 = np.hstack((extended_train_data, predicted_variables_t4.T))
+    extended_train_data_4_std = standardize(extended_train_data_4.T).T
+    extended_index_4 = extended_index + [next_timestamp_4]
+    extended_train_df_4 = pd.DataFrame(extended_train_data_4_std, index=Y_train.index, columns=extended_index_4)
+    model = DynamicFactorModel(extended_train_df_4, num_factors)
+    model.std_data = extended_train_data_4_std.T
+    model.apply_pca()
+    model.yw_estimation()
+    fac_train_extended_4 = model.factors.T
+    data_train_extended_4 = extended_train_data_4_std.T
+    print("Training extended model for t+5 with data and factors...")
+    model.enet_fit(data_train_extended_4, fac_train_extended_4)
+    if model.model_ena is None:
+        raise ValueError("ElasticNet model is not set after fitting. Check enet_fit method.")
+    next_timestamp_5 = next_timestamp_4 + 1
+    next_timestamp_5_str = next_timestamp_5.strftime('%Y-%m')
+    factor_forecast_5 = model.factor_forecast(next_timestamp_5_str, scenarios=1)
+    if factor_forecast_5.shape[1] != num_factors:
+        raise ValueError(f"Expected {num_factors} features, got {factor_forecast_5.shape[1]} features")
+    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_5.T))
+    predicted_variables_t5 = model.enet_predict(factor_forecast_5.reshape(1, -1))
+    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t5.T))
+    # print(f"Predicted variables for {next_timestamp_5_str}:\n", predicted_variables_t5)    
 
     # Calculate RMSE and R² for in-sample and test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
