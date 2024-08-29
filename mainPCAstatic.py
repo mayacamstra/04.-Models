@@ -242,7 +242,32 @@ for num_factors in factor_range:
     predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_5.T))
     predicted_variables_t5 = model.enet_predict(factor_forecast_5.reshape(1, -1))
     predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t5.T))
-    # print(f"Predicted variables for {next_timestamp_5_str}:\n", predicted_variables_t5)    
+    # print(f"Predicted variables for {next_timestamp_5_str}:\n", predicted_variables_t5)  
+    
+	# Voeg de voorspelde waarden voor 't+5' toe aan de trainingsdata
+    extended_train_data_5 = np.hstack((extended_train_data, predicted_variables_t5.T))
+    extended_train_data_5_std = standardize(extended_train_data_5.T).T
+    extended_index_5 = extended_index + [next_timestamp_5]
+    extended_train_df_5 = pd.DataFrame(extended_train_data_5_std, index=Y_train.index, columns=extended_index_5)
+    model = DynamicFactorModel(extended_train_df_5, num_factors)
+    model.std_data = extended_train_data_5_std.T
+    model.apply_pca()
+    model.yw_estimation()
+    fac_train_extended_5 = model.factors.T
+    data_train_extended_5 = extended_train_data_5_std.T
+    print("Training extended model for t+6 with data and factors...")
+    model.enet_fit(data_train_extended_5, fac_train_extended_5)
+    if model.model_ena is None:
+        raise ValueError("ElasticNet model is not set after fitting. Check enet_fit method.")
+    next_timestamp_6 = next_timestamp_5 + 1
+    next_timestamp_6_str = next_timestamp_6.strftime('%Y-%m')
+    factor_forecast_6 = model.factor_forecast(next_timestamp_6_str, scenarios=1)
+    if factor_forecast_6.shape[1] != num_factors:
+        raise ValueError(f"Expected {num_factors} features, got {factor_forecast_6.shape[1]} features")
+    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_6.T))
+    predicted_variables_t6 = model.enet_predict(factor_forecast_6.reshape(1, -1))
+    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t6.T))
+    # print(f"Predicted variables for {next_timestamp_6_str}:\n", predicted_variables_t6)      
 
     # Calculate RMSE and R² for in-sample and test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
