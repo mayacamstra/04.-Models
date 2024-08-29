@@ -154,6 +154,58 @@ for num_factors in factor_range:
 
     print(f"Predicted variables for {next_timestamp_2_str}:\n", predicted_variables_t2)
 
+    # Voeg de voorspelde waarden voor 't+2' toe aan de trainingsdata
+    extended_train_data_2 = np.hstack((extended_train_data, predicted_variables_t2.T))
+
+    # Standaardiseer opnieuw de uitgebreide dataset
+    extended_train_data_2_std = standardize(extended_train_data_2.T).T
+
+    # Update de index met een nieuwe tijdstempel
+    extended_index_2 = extended_index + [next_timestamp_2]
+
+    # Zet de uitgebreide dataset om naar een pandas DataFrame met een correcte index
+    extended_train_df_2 = pd.DataFrame(extended_train_data_2_std, index=Y_train.index, columns=extended_index_2)
+
+    # Fit het model opnieuw met de uitgebreide trainingsset inclusief 't+2' voorspellingen
+    model = DynamicFactorModel(extended_train_df_2, num_factors)
+    model.std_data = extended_train_data_2_std.T
+    model.apply_pca()
+    model.yw_estimation()
+
+    # Hertraining van ElasticNet model met de uitgebreide trainingsdata inclusief 't+2'
+    fac_train_extended_2 = model.factors.T
+    data_train_extended_2 = extended_train_data_2_std.T
+
+    # Debug: print output voor debugging
+    print("Training extended model for t+3 with data and factors...")
+
+    # Fit ElasticNet model met de uitgebreide trainingsdata inclusief 't+2'
+    model.enet_fit(data_train_extended_2, fac_train_extended_2)
+
+    # Controleer of het model correct is ingesteld
+    if model.model_ena is None:
+        raise ValueError("ElasticNet model is not set after fitting. Check enet_fit method.")
+
+    # Gebruik alleen de factoren van 't+2' voor het voorspellen van 't+3'
+    next_timestamp_3 = next_timestamp_2 + 1
+    next_timestamp_3_str = next_timestamp_3.strftime('%Y-%m')
+    factor_forecast_3 = model.factor_forecast(next_timestamp_3_str, scenarios=1)
+
+    # Zorg ervoor dat de vorm van factor_forecast_3 overeenkomt met de verwachte inputdimensie
+    if factor_forecast_3.shape[1] != num_factors:
+        raise ValueError(f"Expected {num_factors} features, got {factor_forecast_3.shape[1]} features")
+
+    # Voeg de voorspelde factoren voor t+3 toe aan de matrix in de dictionary
+    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_3.T))
+
+    # Voorspel de originele variabelen op basis van de voorspelde factoren van 't+2'
+    predicted_variables_t3 = model.enet_predict(factor_forecast_3.reshape(1, -1))
+
+    # Voeg de voorspelde variabelen voor t+3 toe aan de matrix in de dictionary
+    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t3.T))
+
+    print(f"Predicted variables for {next_timestamp_3_str}:\n", predicted_variables_t3)
+
     # Calculate RMSE and R² for in-sample and test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
     rmse_value_test_sample = RMSE(data_test, y_hat_test)
