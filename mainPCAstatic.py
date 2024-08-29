@@ -294,6 +294,31 @@ for num_factors in factor_range:
     predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t7.T))
     # print(f"Predicted variables for {next_timestamp_7_str}:\n", predicted_variables_t7)    
 
+	# Voeg de voorspelde waarden voor 't+7' toe aan de trainingsdata
+    extended_train_data_7 = np.hstack((extended_train_data, predicted_variables_t7.T))
+    extended_train_data_7_std = standardize(extended_train_data_7.T).T
+    extended_index_7 = extended_index + [next_timestamp_7]
+    extended_train_df_7 = pd.DataFrame(extended_train_data_7_std, index=Y_train.index, columns=extended_index_7)
+    model = DynamicFactorModel(extended_train_df_7, num_factors)
+    model.std_data = extended_train_data_7_std.T
+    model.apply_pca()
+    model.yw_estimation()
+    fac_train_extended_7 = model.factors.T
+    data_train_extended_7 = extended_train_data_7_std.T
+    print("Training extended model for t+8 with data and factors...")
+    model.enet_fit(data_train_extended_7, fac_train_extended_7)
+    if model.model_ena is None:
+        raise ValueError("ElasticNet model is not set after fitting. Check enet_fit method.")
+    next_timestamp_8 = next_timestamp_7 + 1
+    next_timestamp_8_str = next_timestamp_8.strftime('%Y-%m')
+    factor_forecast_8 = model.factor_forecast(next_timestamp_8_str, scenarios=1)
+    if factor_forecast_8.shape[1] != num_factors:
+        raise ValueError(f"Expected {num_factors} features, got {factor_forecast_8.shape[1]} features")
+    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_8.T))
+    predicted_variables_t8 = model.enet_predict(factor_forecast_8.reshape(1, -1))
+    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t8.T))
+    # print(f"Predicted variables for {next_timestamp_8_str}:\n", predicted_variables_t8)
+
     # Calculate RMSE and R² for in-sample and test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
     rmse_value_test_sample = RMSE(data_test, y_hat_test)
