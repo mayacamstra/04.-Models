@@ -130,19 +130,44 @@ class DynamicFactorModel:
         """
         Forecast future factors based on the estimated Yule-Walker parameters.
         """
-        future_date = pd.to_datetime(future_date, format='%d/%m/%Y').to_period('M')
+        future_date = pd.to_datetime(future_date, format='%Y-%m').to_period('M')
+
+        # Debug: print de kolomwaarden en de huidige waarde van current_date
+        print("Columns in df_data:", self.df_data.columns)
+        print("Value of current_date before conversion:", self.df_data.columns[-1])
+
+        # Haal de laatste datum op uit de dataset
         current_date = self.df_data.columns[-1]
+
+        # Controleer of current_date al een Period is, en converteer indien nodig
+        if not isinstance(current_date, pd.Period):
+            current_date = pd.to_datetime(str(current_date), errors='coerce').to_period('M')
+            if pd.isnull(current_date):
+                raise ValueError(f"Invalid date format detected in current_date: {self.df_data.columns[-1]}")
+
+        print("Value of current_date after conversion:", current_date)
+
         if future_date <= current_date:
             raise ValueError("The future date must be later than the last date in the data.")
+
+        # Debug: print het aantal maanden dat voorspeld gaat worden
         num_months = (future_date.year - current_date.year) * 12 + future_date.month - current_date.month
+        print(f"Number of months to forecast: {num_months}")
+
+        # Controleer of num_months het verwachte aantal stappen is
+        if num_months != scenarios:
+            print(f"Warning: Number of months ({num_months}) does not match expected scenarios ({scenarios}).")
 
         phi = self.phi[1:].T
         intercept = self.phi[0]
         factors_forecast = []
         factors = self.factors.T[-1]
 
-        for _ in range(num_months):
+        for i in range(num_months):
             factors = np.dot(phi, factors) + intercept
             factors_forecast.append(factors)
+
+            # Debug: Print de status van de voorspellingen
+            print(f"Forecast for month {i+1}: {factors}")
 
         return np.array(factors_forecast)
