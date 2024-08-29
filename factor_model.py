@@ -131,9 +131,25 @@ class DynamicFactorModel:
         Forecast future factors based on the estimated Yule-Walker parameters.
         """
         future_date = pd.to_datetime(future_date, format='%Y-%m').to_period('M')
+
+        # Debug: print de kolomwaarden en de huidige waarde van current_date
+        print("Columns in df_data:", self.df_data.columns)
+        print("Value of current_date before conversion:", self.df_data.columns[-1])
+
+        # Haal de laatste datum op uit de dataset
         current_date = self.df_data.columns[-1]
+
+        # Controleer of current_date al een Period is, en converteer indien nodig
+        if not isinstance(current_date, pd.Period):
+            current_date = pd.to_datetime(str(current_date), errors='coerce').to_period('M')
+            if pd.isnull(current_date):
+                raise ValueError(f"Invalid date format detected in current_date: {self.df_data.columns[-1]}")
+
+        print("Value of current_date after conversion:", current_date)
+
         if future_date <= current_date:
             raise ValueError("The future date must be later than the last date in the data.")
+
         num_months = (future_date.year - current_date.year) * 12 + future_date.month - current_date.month
 
         phi = self.phi[1:].T

@@ -101,19 +101,52 @@ for num_factors in factor_range:
 
     print(f"Predicted variables for {next_timestamp}:\n", predicted_variables_t1)
 
-    # Voorspel factoren voor de tweede tijdstempel na de laatste van de trainingsset
+    # Voeg de voorspelde waarden voor 't+1' toe aan de trainingsdata
+    extended_train_data = np.hstack((Y_train_std, predicted_variables_t1.T))
+
+    # Standaardiseer opnieuw de uitgebreide dataset
+    extended_train_data_std = standardize(extended_train_data.T).T
+
+    # Zorg ervoor dat de uitgebreide dataset een correcte PeriodIndex behoudt
+    # Maak een nieuwe index met tijdstempels
+    extended_index = list(Y_train.columns) + [pd.Period('2020-01', freq='M')]
+
+    # Zet de uitgebreide dataset om naar een pandas DataFrame met een correcte index
+    extended_train_df = pd.DataFrame(extended_train_data_std, index=Y_train.index, columns=extended_index)
+
+    # Fit het model opnieuw met de uitgebreide trainingsset inclusief 't+1' voorspellingen
+    model = DynamicFactorModel(extended_train_df, num_factors)
+    model.std_data = extended_train_data_std.T
+    model.apply_pca()
+    model.yw_estimation()
+
+    # Hertraining van ElasticNet model met de uitgebreide trainingsdata
+    fac_train_extended = model.factors.T
+    data_train_extended = extended_train_data_std.T
+
+    # Debug: print output voor debugging
+    print("Training extended model for t+2 with data and factors...")
+
+    # Fit ElasticNet model met de uitgebreide trainingsdata
+    model.enet_fit(data_train_extended, fac_train_extended)
+
+    # Controleer of het model correct is ingesteld
+    if model.model_ena is None:
+        raise ValueError("ElasticNet model is not set after fitting. Check enet_fit method.")
+
+    # Gebruik alleen de factoren van 't+1' voor het voorspellen van 't+2'
     next_timestamp_2 = pd.Period(next_timestamp, freq='M') + 1
     next_timestamp_2_str = next_timestamp_2.strftime('%Y-%m')
     factor_forecast_2 = model.factor_forecast(next_timestamp_2_str, scenarios=1)
 
-    # Zorg ervoor dat de voorspelde factoren de juiste vorm hebben
+    # Zorg ervoor dat de vorm van factor_forecast_2 overeenkomt met de verwachte inputdimensie
     if factor_forecast_2.shape[1] != num_factors:
         raise ValueError(f"Expected {num_factors} features, got {factor_forecast_2.shape[1]} features")
 
     # Voeg de voorspelde factoren voor t+2 toe aan de matrix in de dictionary
     predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_2.T))
 
-    # Predict the original variables based on the forecasted factors for t+2
+    # Voorspel de originele variabelen op basis van de voorspelde factoren van 't+1'
     predicted_variables_t2 = model.enet_predict(factor_forecast_2.reshape(1, -1))
 
     # Voeg de voorspelde variabelen voor t+2 toe aan de matrix in de dictionary
