@@ -249,6 +249,52 @@ for num_factors in factor_range:
     current_train_data = np.hstack((current_train_data, predicted_variables_t5.T))
 
     # Nu kun je verdergaan met het berekenen van RMSE en andere metrics zoals eerder gedaan
+    # Calculate RMSE and R² for in-sample and test data
+    rmse_value_in_sample = RMSE(data_train, y_hat_train)
+    rmse_value_test_sample = RMSE(data_test, y_hat_test)
+    r2_test_sample = calculate_r2(data_test, y_hat_test)
+    
+    # Calculate log-likelihood, AIC, and BIC
+    log_like_value = log_likelihood(data_train, y_hat_train)
+    aic_value, bic_value = calculate_aic_bic(y_hat_train, data_train, num_factors)
+    # Calculate adjusted R²
+    adj_r2_in_sample = adjusted_r2(r2_insample, data_train.shape[0], num_factors)
+    adj_r2_test_sample = adjusted_r2(r2_test_sample, data_test.shape[0], num_factors)
+    # Average RMSE values across variables
+    avg_rmse_in_sample = rmse_value_in_sample.mean()
+    avg_rmse_test_sample = rmse_value_test_sample.mean()
+    # Append the results to the list
+    results.append({
+        'Num_Factors': num_factors,
+        'RMSE_InSample': avg_rmse_in_sample,
+        'R2_InSample': r2_insample,
+        'Adjusted_R2_InSample': adj_r2_in_sample,
+        'RMSE_TestSample': avg_rmse_test_sample,
+        'R2_TestSample': r2_test_sample,
+        'Adjusted_R2_TestSample': adj_r2_test_sample,
+        'Log_Likelihood': log_like_value,
+        'AIC': aic_value,
+        'BIC': bic_value
+    })
+    # Plot residuals
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.scatter(y_hat_train.flatten(), residuals_train.flatten())
+    plt.title(f'Residuals vs Fitted (In-sample Train) - {num_factors} Factors')
+    plt.xlabel('Fitted values')
+    plt.ylabel('Residuals')
+    plt.axhline(0, color='red', linestyle='--')
+    plt.subplot(1, 2, 2)
+    plt.scatter(y_hat_test.flatten(), residuals_test.flatten())
+    plt.title(f'Residuals vs Fitted (In-sample Test) - {num_factors} Factors')
+    plt.xlabel('Fitted values')
+    plt.ylabel('Residuals')
+    plt.axhline(0, color='red', linestyle='--')
+    plt.tight_layout()
+    
+    # Save the plot instead of showing it
+    plt.savefig(f"{plot_dir}/residuals_{num_factors}_factors.png")
+    plt.close()  # Close the figure to free up memory
 
 # Converteer de resultatenlijsten naar DataFrames voor eventuele verdere analyse of opslag
 results_df = pd.DataFrame(results)
