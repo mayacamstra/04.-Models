@@ -18,11 +18,8 @@ combined_df = load_combined_data(static_file_path, forward_file_path)
 # Apply Christiano-Fitzgerald filter
 filtered_combined_df = filter_data(combined_df)
 
-# Separate static variables for RMSE calculation
-static_df = combined_df.loc[combined_df.index[:66]]
-
 # Save variable names
-variable_names = static_df.index.tolist()
+variable_names = filtered_combined_df.index.tolist()
 
 # Define training and validation periods and split the data
 DATE_TRAIN_END = pd.Period('2019-12', freq='M')
@@ -49,17 +46,15 @@ predicted_variables_dict = {}
 
 for num_factors in factor_range:
     print(f"\nEvaluating model with {num_factors} factors")
-
+    
     # Initialize the dynamic factor model
     model = DynamicFactorModel(Y_train, num_factors)
     
     # Fit the Dynamic Factor Model and apply PCA
     model.std_data = Y_train_std.T
     model.apply_pca()
-
-    # Estimate the Yule-Walker equations
     model.yw_estimation()
-
+    
     # Use 80% of the training data for training and 20% for testing
     train_split_index = int(model.factors.shape[1] * 0.8)
     data_train = Y_train_std[:, :train_split_index].T  # 80% of training data
@@ -68,156 +63,77 @@ for num_factors in factor_range:
     fac_test = model.factors[:, train_split_index:].T
     
     # Fit ElasticNet model
-    print("Fitting ElasticNet model...")
     B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
-
+    
     # Validate model on in-sample data
     y_hat_train = model.enet_predict(fac_train)
-
+    
     # Validate model on out-of-sample data
     y_hat_test = model.enet_predict(fac_test)
     
     # Calculate residuals
     residuals_train = data_train - y_hat_train
     residuals_test = data_test - y_hat_test
-
-    # Save the trained ElasticNet model for future predictions
-    elastic_net_model = model.model_ena
     
-    # Voorspel factoren en variabelen voor t+1
-    current_train_data = Y_train_std  # Start met de trainingsdata
-    next_timestamp = DATE_TRAIN_END + 1
-    next_timestamp_str = next_timestamp.strftime('%Y-%m')
-
-    current_train_data_df = pd.DataFrame(
-        current_train_data,
-        index=Y_train.index,
-        columns=Y_train.columns
-    )
+    # Initialiseer variabelen voor voorspellingen
+    current_train_data = Y_train_std
+    current_factor_forecast = None
+    current_predicted_variables = None
+    current_index = list(Y_train.columns)
     
-    model = DynamicFactorModel(current_train_data_df, num_factors)
-    model.std_data = current_train_data_df.values.T
-    model.apply_pca()
-    model.yw_estimation()
-    model.model_ena = elastic_net_model
+    # Voorspellingen voor tijdstappen t+1 tot t+48
+    for t in range(1, 48):
+        next_timestamp = current_index[-1] + 1  # Bereken volgende timestamp
+        next_timestamp_str = next_timestamp.strftime('%Y-%m')
+        
+        # Voorspel de volgende set factoren
+        factor_forecast = model.factor_forecast(next_timestamp_str, scenarios=1)
+        
+        # Controleer de vorm van de voorspelde factoren
+        if factor_forecast.shape[1] != num_factors:
+            raise ValueError(f"Expected {num_factors} features, got {factor_forecast.shape[1]} features")
+        
+        # Voeg de voorspelde factoren toe aan de matrix in de dictionary
+        predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict.get(num_factors, np.empty((num_factors, 0))), factor_forecast.T))
+        
+        # Voorspel de originele variabelen op basis van de voorspelde factoren
+        predicted_variables = model.enet_predict(factor_forecast.reshape(1, -1))
+        
+        # Voeg de voorspelde variabelen toe aan de matrix in de dictionary
+        predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict.get(num_factors, np.empty((Y_train_std.shape[0], 0))), predicted_variables.T))
+        
+        # Voeg de voorspelde waarden voor de huidige stap toe aan de trainingsdata
+        extended_train_data = np.hstack((current_train_data, predicted_variables.T))
+        
+        # Standaardiseer opnieuw de uitgebreide dataset
+        extended_train_data_std = standardize(extended_train_data.T).T
+        
+        # Update de index met een nieuwe tijdstempel
+        extended_index = current_index + [next_timestamp]
+        
+        # Zet de uitgebreide dataset om naar een pandas DataFrame met een correcte index
+        extended_train_df = pd.DataFrame(extended_train_data_std, index=Y_train.index, columns=extended_index)
+        
+        # Fit het model opnieuw met de uitgebreide trainingsset
+        model = DynamicFactorModel(extended_train_df, num_factors)
+        model.std_data = extended_train_data_std.T
+        model.apply_pca()
+        model.yw_estimation()
+        
+        # Hertraining van ElasticNet model met de uitgebreide trainingsdata
+        fac_train_extended = model.factors.T
+        data_train_extended = extended_train_data_std.T
+        
+        # Simpele print statement
+        print(f"Training extended model for t+{t+1} with data and factors...")
+        
+        # Fit ElasticNet model met de uitgebreide trainingsdata
+        model.enet_fit(data_train_extended, fac_train_extended)
+        
+        # Update current data voor de volgende iteratie
+        current_train_data = extended_train_data_std
+        current_index = extended_index
 
-    factor_forecast = model.factor_forecast(next_timestamp_str, scenarios=1)
-    predicted_variables_t1 = model.enet_predict(factor_forecast.reshape(1, -1))
-
-    # Store the predicted factors and variables for t+1
-    if num_factors not in predicted_factors_dict:
-        predicted_factors_dict[num_factors] = factor_forecast.T
-    else:
-        predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast.T))
-    
-    if num_factors not in predicted_variables_dict:
-        predicted_variables_dict[num_factors] = predicted_variables_t1.T
-    else:
-        predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t1.T))
-
-    current_train_data = np.hstack((current_train_data, predicted_variables_t1.T))
-
-    # Herhaal voor t+2
-    next_timestamp_2 = next_timestamp + 1
-    next_timestamp_2_str = next_timestamp_2.strftime('%Y-%m')
-
-    current_train_data_df = pd.DataFrame(
-        current_train_data,
-        index=Y_train.index,
-        columns=list(Y_train.columns) + [next_timestamp_str]
-    )
-    
-    model = DynamicFactorModel(current_train_data_df, num_factors)
-    model.std_data = current_train_data_df.values.T
-    model.apply_pca()
-    model.yw_estimation()
-    model.model_ena = elastic_net_model
-
-    factor_forecast_2 = model.factor_forecast(next_timestamp_2_str, scenarios=1)
-    predicted_variables_t2 = model.enet_predict(factor_forecast_2.reshape(1, -1))
-
-    # Store the predicted factors and variables for t+2
-    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_2.T))
-    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t2.T))
-
-    current_train_data = np.hstack((current_train_data, predicted_variables_t2.T))
-
-    # Herhaal voor t+3
-    next_timestamp_3 = next_timestamp_2 + 1
-    next_timestamp_3_str = next_timestamp_3.strftime('%Y-%m')
-
-    current_train_data_df = pd.DataFrame(
-        current_train_data,
-        index=Y_train.index,
-        columns=list(Y_train.columns) + [next_timestamp_str, next_timestamp_2_str]
-    )
-    
-    model = DynamicFactorModel(current_train_data_df, num_factors)
-    model.std_data = current_train_data_df.values.T
-    model.apply_pca()
-    model.yw_estimation()
-    model.model_ena = elastic_net_model
-
-    factor_forecast_3 = model.factor_forecast(next_timestamp_3_str, scenarios=1)
-    predicted_variables_t3 = model.enet_predict(factor_forecast_3.reshape(1, -1))
-
-    # Store the predicted factors and variables for t+3
-    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_3.T))
-    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t3.T))
-
-    current_train_data = np.hstack((current_train_data, predicted_variables_t3.T))
-
-    # Herhaal voor t+4
-    next_timestamp_4 = next_timestamp_3 + 1
-    next_timestamp_4_str = next_timestamp_4.strftime('%Y-%m')
-
-    current_train_data_df = pd.DataFrame(
-        current_train_data,
-        index=Y_train.index,
-        columns=list(Y_train.columns) + [next_timestamp_str, next_timestamp_2_str, next_timestamp_3_str]
-    )
-    
-    model = DynamicFactorModel(current_train_data_df, num_factors)
-    model.std_data = current_train_data_df.values.T
-    model.apply_pca()
-    model.yw_estimation()
-    model.model_ena = elastic_net_model
-
-    factor_forecast_4 = model.factor_forecast(next_timestamp_4_str, scenarios=1)
-    predicted_variables_t4 = model.enet_predict(factor_forecast_4.reshape(1, -1))
-
-    # Store the predicted factors and variables for t+4
-    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_4.T))
-    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t4.T))
-
-    current_train_data = np.hstack((current_train_data, predicted_variables_t4.T))
-
-    # Herhaal voor t+5
-    next_timestamp_5 = next_timestamp_4 + 1
-    next_timestamp_5_str = next_timestamp_5.strftime('%Y-%m')
-
-    current_train_data_df = pd.DataFrame(
-        current_train_data,
-        index=Y_train.index,
-        columns=list(Y_train.columns) + [next_timestamp_str, next_timestamp_2_str, next_timestamp_3_str, next_timestamp_4_str]
-    )
-    
-    model = DynamicFactorModel(current_train_data_df, num_factors)
-    model.std_data = current_train_data_df.values.T
-    model.apply_pca()
-    model.yw_estimation()
-    model.model_ena = elastic_net_model
-
-    factor_forecast_5 = model.factor_forecast(next_timestamp_5_str, scenarios=1)
-    predicted_variables_t5 = model.enet_predict(factor_forecast_5.reshape(1, -1))
-
-    # Store the predicted factors and variables for t+5
-    predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict[num_factors], factor_forecast_5.T))
-    predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict[num_factors], predicted_variables_t5.T))
-
-    current_train_data = np.hstack((current_train_data, predicted_variables_t5.T))
-
-    # Nu kun je verdergaan met het berekenen van RMSE en andere metrics zoals eerder gedaan
     # Calculate RMSE and R² for in-sample and test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
     rmse_value_test_sample = RMSE(data_test, y_hat_test)
@@ -226,12 +142,15 @@ for num_factors in factor_range:
     # Calculate log-likelihood, AIC, and BIC
     log_like_value = log_likelihood(data_train, y_hat_train)
     aic_value, bic_value = calculate_aic_bic(y_hat_train, data_train, num_factors)
+    
     # Calculate adjusted R²
     adj_r2_in_sample = adjusted_r2(r2_insample, data_train.shape[0], num_factors)
     adj_r2_test_sample = adjusted_r2(r2_test_sample, data_test.shape[0], num_factors)
+    
     # Average RMSE values across variables
     avg_rmse_in_sample = rmse_value_in_sample.mean()
     avg_rmse_test_sample = rmse_value_test_sample.mean()
+    
     # Append the results to the list
     results.append({
         'Num_Factors': num_factors,
@@ -245,6 +164,7 @@ for num_factors in factor_range:
         'AIC': aic_value,
         'BIC': bic_value
     })
+    
     # Plot residuals
     plt.figure(figsize=(12, 6))
     plt.subplot(1, 2, 1)
@@ -253,6 +173,7 @@ for num_factors in factor_range:
     plt.xlabel('Fitted values')
     plt.ylabel('Residuals')
     plt.axhline(0, color='red', linestyle='--')
+    
     plt.subplot(1, 2, 2)
     plt.scatter(y_hat_test.flatten(), residuals_test.flatten())
     plt.title(f'Residuals vs Fitted (In-sample Test) - {num_factors} Factors')
@@ -269,12 +190,13 @@ for num_factors in factor_range:
 results_df = pd.DataFrame(results)
 # Save the results to an Excel file
 results_df.to_excel('results_PCAcombined_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx', index=False)
+
 # Sla de voorspelde matrices op als Excel-bestanden voor elk aantal factoren
 for num_factors, matrix in predicted_factors_dict.items():
     pd.DataFrame(matrix).to_excel(f'PCAcombined_predicted_factors_matrix_{num_factors}.xlsx', index=False)
     
 for num_factors, matrix in predicted_variables_dict.items():
     pd.DataFrame(matrix).to_excel(f'PCAcombined_predicted_variables_matrix_{num_factors}.xlsx', index=False)
-# Print feedback naar de gebruiker
+
 print("Results saved to results_PCAcombined_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx")
 print("Predicted factors and variables matrices saved to separate Excel files for each number of factors.")
