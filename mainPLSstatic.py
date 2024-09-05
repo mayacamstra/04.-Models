@@ -28,12 +28,12 @@ Y_train = filtered_df.loc[:, :DATE_TRAIN_END]  # Data until 2019-12
 Y_validate = filtered_df.loc[:, DATE_VALIDATE_START:DATE_VALIDATE_END]  # Data from 2020-01 to 2023-11
 
 # Standardize the datasets
-Y_train_std = standardize(Y_train.values.T).T
-Y_validate_std = standardize(Y_validate.values.T).T
+Y_train_std = standardize(Y_train.values)
+Y_validate_std = standardize(Y_validate.values)
 
 # Debug: check shapes of standardized data
-print(f"Shape of Y_train_std: {Y_train_std.shape}")
-print(f"Shape of Y_validate_std: {Y_validate_std.shape}")
+print(f"Shape of Y_train_std: {Y_train_std.shape} (expected: 66 variables x 300 months)")
+print(f"Shape of Y_validate_std: {Y_validate_std.shape} (expected: 66 variables x 47 months)")
 
 # Define the range of factors to test
 factor_range = range(5, 13)  # Example range from 5 to 12 factors
@@ -50,14 +50,14 @@ for num_factors in factor_range:
     
     # Initialize the dynamic factor model with the PLS method
     model = DynamicFactorModel(Y_train, num_factors, method='PLS')  # Specify PLS as the method
-    
-    # Fit the Dynamic Factor Model and apply PLS
-    model.std_data = Y_train_std.T
-    model.apply_pls(Y_train_std.T, Y_train_std.T)
-    
+
+    # Transpose so PLS works on the variables (66 variables x 300 time points)
+    model.std_data = Y_train_std.T  # Transpose to shape (300, 66)
+    model.apply_pls(Y_train_std.T, Y_train_std.T)  # PLS should be applied on (300, 66)
+
     # Debug: Print the shape of factors after PLS
     print(f"Shape of PLS factors: {model.factors.shape}")
-    
+
     # Ensure factors are 2D (num_factors, num_time_points)
     if len(model.factors.shape) == 1:
         raise ValueError(f"PLS factors are not 2D. Got shape {model.factors.shape} instead of expected 2D array.")
@@ -106,8 +106,8 @@ for num_factors in factor_range:
     current_train_data = Y_train_std
     current_index = list(Y_train.columns)
     
-    # Voorspellingen voor tijdstappen t+1 tot t+6
-    for t in range(1, 6):
+    # Voorspellingen voor tijdstappen t+1 tot t+49
+    for t in range(1, 49):
         next_timestamp = current_index[-1] + 1  # Bereken volgende timestamp
         next_timestamp_str = next_timestamp.strftime('%Y-%m')
         
