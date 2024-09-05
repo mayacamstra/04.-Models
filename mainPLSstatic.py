@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
 from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model import DynamicFactorModel  # Gebruik de bestaande DynamicFactorModel klasse
-#test
 
 # Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
 plot_dir = "plots_PLSstatic"
@@ -32,6 +31,10 @@ Y_validate = filtered_df.loc[:, DATE_VALIDATE_START:DATE_VALIDATE_END]  # Data f
 Y_train_std = standardize(Y_train.values.T).T
 Y_validate_std = standardize(Y_validate.values.T).T
 
+# Debug: check shapes of standardized data
+print(f"Shape of Y_train_std: {Y_train_std.shape}")
+print(f"Shape of Y_validate_std: {Y_validate_std.shape}")
+
 # Define the range of factors to test
 factor_range = range(5, 13)  # Example range from 5 to 12 factors
 
@@ -51,12 +54,24 @@ for num_factors in factor_range:
     # Fit the Dynamic Factor Model and apply PLS
     model.std_data = Y_train_std.T
     model.apply_pls(Y_train_std.T, Y_train_std.T)
+    
+    # Debug: Print the shape of factors after PLS
+    print(f"Shape of PLS factors: {model.factors.shape}")
+    
+    # Ensure factors are 2D (num_factors, num_time_points)
+    if len(model.factors.shape) == 1:
+        raise ValueError(f"PLS factors are not 2D. Got shape {model.factors.shape} instead of expected 2D array.")
+    
+    # Transpose factors if necessary
+    if model.factors.shape[0] != num_factors:
+        model.factors = model.factors.T
+    
+    print(f"Shape of factors after adjustment: {model.factors.shape}")
+    
     model.yw_estimation()
     
-    # Transpose the factors to match the expected shape
-    factors = model.factors.T  # Shape (num_factors, num_time_points)
-    
-    # Debug: Print the shape of factors
+    # Debug: Print the shape of factors after YW estimation
+    factors = model.factors
     print(f"Shape of factors after PLS: {factors.shape}")
     
     # Use 80% of the training data for training and 20% for testing
@@ -65,6 +80,10 @@ for num_factors in factor_range:
     fac_train = factors[:, :train_split_index].T
     data_test = Y_train_std[:, train_split_index:].T  # 20% of training data
     fac_test = factors[:, train_split_index:].T
+    
+    # Debug: Print the shapes of training and test sets
+    print(f"Shape of data_train: {data_train.shape}, fac_train: {fac_train.shape}")
+    print(f"Shape of data_test: {data_test.shape}, fac_test: {fac_test.shape}")
     
     # Fit ElasticNet model
     B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
@@ -78,11 +97,13 @@ for num_factors in factor_range:
     # Calculate residuals
     residuals_train = data_train - y_hat_train
     residuals_test = data_test - y_hat_test
+
+    # Debug: Print residuals shape
+    print(f"Residuals train shape: {residuals_train.shape}")
+    print(f"Residuals test shape: {residuals_test.shape}")
     
     # Initialiseer variabelen voor voorspellingen
     current_train_data = Y_train_std
-    current_factor_forecast = None
-    current_predicted_variables = None
     current_index = list(Y_train.columns)
     
     # Voorspellingen voor tijdstappen t+1 tot t+6
@@ -98,13 +119,19 @@ for num_factors in factor_range:
         
         # Controleer de vorm van de voorspelde factoren
         if factor_forecast.shape[1] != num_factors:
+            # Zorg ervoor dat je alleen het juiste aantal factoren behoudt
+            factor_forecast = factor_forecast[:, :num_factors]
+            print(f"Adjusted factor_forecast shape for t+{t}: {factor_forecast.shape}")
+        
+        # Controleer nogmaals of de aangepaste voorspelling klopt
+        if factor_forecast.shape[1] != num_factors:
             raise ValueError(f"Expected {num_factors} features, got {factor_forecast.shape[1]} features")
         
         # Voeg de voorspelde factoren toe aan de matrix in de dictionary
         predicted_factors_dict[num_factors] = np.hstack((predicted_factors_dict.get(num_factors, np.empty((num_factors, 0))), factor_forecast.T))
         
         # Voorspel de originele variabelen op basis van de voorspelde factoren
-        predicted_variables = model.enet_predict(factor_forecast.reshape(1, -1))
+        predicted_variables = model.enet_predict(factor_forecast)
         
         # Voeg de voorspelde variabelen toe aan de matrix in de dictionary
         predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict.get(num_factors, np.empty((Y_train_std.shape[0], 0))), predicted_variables.T))
@@ -115,6 +142,9 @@ for num_factors in factor_range:
         # Standaardiseer opnieuw de uitgebreide dataset
         extended_train_data_std = standardize(extended_train_data.T).T
         
+        # Debug: Print the shape of extended_train_data_std
+        print(f"Shape of extended_train_data_std for t+{t}: {extended_train_data_std.shape}")
+        
         # Update de index met een nieuwe tijdstempel
         extended_index = current_index + [next_timestamp]
         
@@ -122,9 +152,17 @@ for num_factors in factor_range:
         extended_train_df = pd.DataFrame(extended_train_data_std, index=Y_train.index, columns=extended_index)
         
         # Fit het model opnieuw met de uitgebreide trainingsset
-        model = DynamicFactorModel(extended_train_df, num_factors)
+        model = DynamicFactorModel(extended_train_df, num_factors, method='PLS')
         model.std_data = extended_train_data_std.T
-        model.apply_pls(Y_train_std.T, Y_train_std.T)
+        
+        # Let op: altijd transponeren zodat de vorm correct blijft
+        model.apply_pls(extended_train_data_std.T, extended_train_data_std.T)
+        
+        # Controleer of de factoren correct zijn getransformeerd (altijd 2D, num_factors x time_points)
+        if model.factors.shape[0] != num_factors:
+            model.factors = model.factors.T  # Transponeer indien nodig
+        print(f"Shape of factors after adjustment: {model.factors.shape}")
+        
         model.yw_estimation()
         
         # Hertraining van ElasticNet model met de uitgebreide trainingsdata
