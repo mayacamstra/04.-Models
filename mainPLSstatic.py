@@ -106,8 +106,8 @@ for num_factors in factor_range:
     current_train_data = Y_train_std
     current_index = list(Y_train.columns)
     
-    # Voorspellingen voor tijdstappen t+1 tot t+49
-    for t in range(1, 49):
+    # Voorspellingen voor tijdstappen t+1 tot t+48
+    for t in range(1, 48):
         next_timestamp = current_index[-1] + 1  # Bereken volgende timestamp
         next_timestamp_str = next_timestamp.strftime('%Y-%m')
         
