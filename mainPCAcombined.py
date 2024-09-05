@@ -81,8 +81,8 @@ for num_factors in factor_range:
     current_predicted_variables = None
     current_index = list(Y_train.columns)
     
-    # Voorspellingen voor tijdstappen t+1 tot t+48
-    for t in range(1, 48):
+    # Voorspellingen voor tijdstappen t+1 tot t+6
+    for t in range(1, 6):
         next_timestamp = current_index[-1] + 1  # Bereken volgende timestamp
         next_timestamp_str = next_timestamp.strftime('%Y-%m')
         
@@ -189,14 +189,14 @@ for num_factors in factor_range:
 # Converteer de resultatenlijsten naar DataFrames voor eventuele verdere analyse of opslag
 results_df = pd.DataFrame(results)
 # Save the results to an Excel file
-results_df.to_excel('results_PCAcombined_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx', index=False)
+# results_df.to_excel('results_PCAcombined_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx', index=False)
 
 # Sla de voorspelde matrices op als Excel-bestanden voor elk aantal factoren
-for num_factors, matrix in predicted_factors_dict.items():
-    pd.DataFrame(matrix).to_excel(f'PCAcombined_predicted_factors_matrix_{num_factors}.xlsx', index=False)
+# for num_factors, matrix in predicted_factors_dict.items():
+#     pd.DataFrame(matrix).to_excel(f'PCAcombined_predicted_factors_matrix_{num_factors}.xlsx', index=False)
     
-for num_factors, matrix in predicted_variables_dict.items():
-    pd.DataFrame(matrix).to_excel(f'PCAcombined_predicted_variables_matrix_{num_factors}.xlsx', index=False)
+# for num_factors, matrix in predicted_variables_dict.items():
+#     pd.DataFrame(matrix).to_excel(f'PCAcombined_predicted_variables_matrix_{num_factors}.xlsx', index=False)
 
 print("Results saved to results_PCAcombined_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx")
 print("Predicted factors and variables matrices saved to separate Excel files for each number of factors.")

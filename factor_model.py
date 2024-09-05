@@ -31,7 +31,8 @@ class DynamicFactorModel:
         """
         Apply Principal Component Analysis (PCA) to extract factors.
         """
-        self.factors = apply_pca(self.std_data.T, self.num_factors)
+        self.factors = apply_pca(self.std_data.T, self.num_factors).T  # Transponeer om consistente vorm te behouden
+
 
     def apply_pls(self, X, Y):
         """
@@ -45,8 +46,15 @@ class DynamicFactorModel:
         np.ndarray: The extracted factors.
         """
         self.factors = self.pls_model.fit_transform(X, Y)
+        
+        # Debug: Check if factors are 2D after PLS
+        print(f"Shape of PLS factors: {self.factors.shape}")
+
+        # Ensure the factors remain 2D, if necessary reshape or transpose
+        if len(self.factors.shape) == 1:
+            self.factors = self.factors.reshape(-1, 1)  # Ensure it's at least 2D
         return self.factors
-    
+
     def transform(self, X):
         """
         Transform the data using the fitted PLS model.
@@ -66,6 +74,16 @@ class DynamicFactorModel:
         """
         Perform Yule-Walker estimation on the factors to fit a VAR model.
         """
+        # Debug: Check the shape of factors
+        print(f"Shape of factors before VAR: {self.factors.shape}")
+
+        # Check if factors are 2D (num_factors, num_time_points) and transpose accordingly
+        if self.factors.ndim == 1:
+            raise ValueError("Factors should be a 2D array but received a 1D array.")
+        elif self.factors.shape[0] != self.num_factors:
+            raise ValueError(f"Expected {self.num_factors} factors, got {self.factors.shape[0]}")
+
+        # The factors need to be transposed to fit (time_points, num_factors)
         model = sm.tsa.VAR(self.factors.T)
         results = model.fit(1)
         self.phi = results.params
