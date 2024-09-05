@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
 from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model import DynamicFactorModel  # Gebruik de bestaande DynamicFactorModel klasse
+#test
 
 # Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
 plot_dir = "plots_PLSstatic"
