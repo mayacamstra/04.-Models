@@ -31,7 +31,7 @@ class DynamicFactorModel:
         """
         Apply Principal Component Analysis (PCA) to extract factors.
         """
-        self.factors = apply_pca(self.std_data.T, self.num_factors).T  # Transponeer om consistente vorm te behouden
+        self.factors = apply_pca(self.std_data.T, self.num_factors)
 
 
     def apply_pls(self, X, Y):

@@ -5,10 +5,19 @@ import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
 from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model import DynamicFactorModel
-# test
+
+# Zorg ervoor dat de directory bestaat waar we de resultaten gaan opslaan
+save_directory = r"C:\Thesis\04. Models\PCAstatic"  # Map waar je de Excel bestanden wil opslaan
+os.makedirs(save_directory, exist_ok=True)
+
+# Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
+plot_dir = os.path.join(save_directory, "plots_PCAstatic")
+os.makedirs(plot_dir, exist_ok=True)
+
 # Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
 plot_dir = "plots_PCAstatic"
 os.makedirs(plot_dir, exist_ok=True)
+
 # Load and filter data
 file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
 df_data = load_data(file_path)
@@ -1341,16 +1350,20 @@ for num_factors in factor_range:
     # Save the plot instead of showing it
     plt.savefig(f"{plot_dir}/residuals_{num_factors}_factors.png")
     plt.close()  # Close the figure to free up memory
+
 # Converteer de resultatenlijsten naar DataFrames voor eventuele verdere analyse of opslag
 results_df = pd.DataFrame(results)
-# Save the results to an Excel file
-results_df.to_excel('results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx', index=False)
+results_path = os.path.join(save_directory, 'results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx')
+results_df.to_excel(results_path, index=False)
+
 # Sla de voorspelde matrices op als Excel-bestanden voor elk aantal factoren
 for num_factors, matrix in predicted_factors_dict.items():
-    pd.DataFrame(matrix).to_excel(f'predicted_factors_matrix_{num_factors}.xlsx', index=False)
+    factors_path = os.path.join(save_directory, f'PCAstatic_predicted_factors_matrix_{num_factors}.xlsx')
+    pd.DataFrame(matrix).to_excel(factors_path, index=False)
     
 for num_factors, matrix in predicted_variables_dict.items():
-    pd.DataFrame(matrix).to_excel(f'predicted_variables_matrix_{num_factors}.xlsx', index=False)
-# Print feedback naar de gebruiker
-print("Results saved to results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx")
-print("Predicted factors and variables matrices saved to separate Excel files for each number of factors.")
+    variables_path = os.path.join(save_directory, f'PCAstatic_predicted_variables_matrix_{num_factors}.xlsx')
+    pd.DataFrame(matrix).to_excel(variables_path, index=False)
+
+print(f"Results saved to {results_path}")
+print(f"Predicted factors and variables matrices saved to separate Excel files for each number of factors.")
