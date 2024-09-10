@@ -85,8 +85,8 @@ for num_factors in factor_range:
     current_predicted_variables = None
     current_index = list(Y_train.columns)
     
-    # Voorspellingen voor tijdstappen t+1 tot t+6
-    for t in range(1, 6):
+    # Voorspellingen voor tijdstappen t+1 tot t+47
+    for t in range(1, 48):
         next_timestamp = current_index[-1] + 1  # Bereken volgende timestamp
         next_timestamp_str = next_timestamp.strftime('%Y-%m')
         
@@ -168,6 +168,16 @@ for num_factors in factor_range:
         'AIC': aic_value,
         'BIC': bic_value
     })
+    
+    # Check eigenvalues of the Yule-Walker matrix A (phi)
+    eigenvalues, _ = np.linalg.eig(model.phi[1:])  # Matrix A is phi[1:], excluding the intercept
+    print(f"Eigenvalues of the matrix A (phi[1:]) for {num_factors} factors: {eigenvalues}")
+
+    # Check if all eigenvalues have an absolute value less than 1
+    if np.all(np.abs(eigenvalues) < 1):
+        print(f"All eigenvalues for {num_factors} factors are within the unit circle. Model is stable.")
+    else:
+        print(f"Warning: Some eigenvalues for {num_factors} factors are outside the unit circle. Model might be unstable.")    
     
     # Plot residuals
     plt.figure(figsize=(12, 6))
