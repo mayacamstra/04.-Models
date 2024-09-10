@@ -7,7 +7,7 @@ from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likeli
 from factor_model import DynamicFactorModel
 
 # Zorg ervoor dat de directory bestaat waar we de resultaten gaan opslaan
-save_directory = r"C:\Thesis\04. Models\PCAstatic"  # Map waar je de Excel-bestanden wil opslaan
+save_directory = r"C:\Thesis\04. Models\PCAstatic"
 os.makedirs(save_directory, exist_ok=True)
 
 # Zorg ervoor dat de directory bestaat waar we de plots gaan opslaan
@@ -35,7 +35,7 @@ filtered_df_std = standardize(filtered_df)
 
 # Debug statement: Print data na het standaardiseren
 print("\n--- Data after standardization ---")
-print(filtered_df_std.head())  # Toon de eerste 5 rijen van de DataFrame
+print(filtered_df_std.head())
 print(f"Shape of filtered_df_std: {filtered_df_std.shape}")
 
 # Define training and validation periods and split the data
@@ -43,7 +43,7 @@ DATE_TRAIN_END = pd.Period('2019-12', freq='M')
 DATE_VALIDATE_START = pd.Period('2020-01', freq='M')
 DATE_VALIDATE_END = pd.Period('2023-11', freq='M')
 
-# Controleer de column indexen op basis van de tijdsperiodes
+# Split de data in training en validatie sets
 try:
     train_end_index = filtered_df.columns.get_loc(DATE_TRAIN_END)
     validate_start_index = filtered_df.columns.get_loc(DATE_VALIDATE_START)
@@ -70,7 +70,7 @@ except Exception as e:
     print(f"Error in splitting the data: {e}")
 
 # Define the range of factors to test
-factor_range = range(5, 13)  # Example range from 5 to 12 factors
+factor_range = range(5, 13)
 
 # Initialize a list to store results
 results = []
@@ -223,7 +223,7 @@ for num_factors in factor_range:
 
     # Save the plot instead of showing it
     plt.savefig(f"{plot_dir}/residuals_{num_factors}_factors.png")
-    plt.close()  # Close the figure to free up memory
+    plt.close()
 
 # Converteer de resultatenlijsten naar DataFrames voor eventuele verdere analyse of opslag
 results_df = pd.DataFrame(results)

@@ -4,15 +4,22 @@ import pandas as pd
 def standardize(variables):
     """
     Standardize the variables by subtracting the mean and dividing by the standard deviation.
+    This function returns a DataFrame with the same index and columns as the input.
 
     Parameters:
-    variables (np.ndarray or pd.DataFrame): The data to standardize.
+    variables (pd.DataFrame): The data to standardize.
 
     Returns:
-    np.ndarray: The standardized data.
+    pd.DataFrame: The standardized data.
     """
     central = (variables - variables.mean())
-    return central / central.std()
+    standardized = central / central.std()
+
+    # Return the standardized data as a DataFrame with the original index and columns
+    if isinstance(variables, pd.DataFrame):
+        return pd.DataFrame(standardized, index=variables.index, columns=variables.columns)
+    else:
+        return standardized
 
 def RMSE(data: pd.DataFrame, estimation: pd.DataFrame):
     """
