@@ -105,16 +105,21 @@ for num_factors in factor_range:
     residuals_train = data_train - y_hat_train
     residuals_test = data_test - y_hat_test
 
-    # Debug: Print residuals shape
-    print(f"Residuals train shape: {residuals_train.shape}")
-    print(f"Residuals test shape: {residuals_test.shape}")
+    # Check if the mean of the residuals (mu(varepsilon) is zero
+    residuals_mean = np.mean(residuals_train, axis=0)
+    print(f"Mean of residuals for {num_factors} factors: {residuals_mean}")
+
+    if np.allclose(residuals_mean, 0, atol=1e-5):
+        print(f"No shift detected in the factors mu(varepsilon) = 0) for {num_factors} factors.")
+    else:
+        print(f"Warning: Shift detected in the factors mu(varepsilon) != 0) for {num_factors} factors.")
 
     # Initialiseer variabelen voor voorspellingen
     current_train_data = Y_train_std
     current_index = list(Y_train.columns)
 
     # Voorspellingen voor tijdstappen t+1 tot t+47
-    for t in range(1, 48):
+    for t in range(1, 3):
         next_timestamp = current_index[-1] + 1  # Bereken volgende timestamp
         next_timestamp_str = next_timestamp.strftime('%Y-%m')
 
