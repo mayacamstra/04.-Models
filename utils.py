@@ -4,22 +4,22 @@ import pandas as pd
 def standardize(variables):
     """
     Standardize the variables by subtracting the mean and dividing by the standard deviation.
-    This function returns a DataFrame with the same index and columns as the input.
-
+    This function standardizes per row (time series) so that each time series (row) has a mean of 0 and standard deviation of 1.
+    
     Parameters:
-    variables (pd.DataFrame): The data to standardize.
-
+    variables (pd.DataFrame or np.ndarray): The data to standardize (each row represents a time series).
+    
     Returns:
-    pd.DataFrame: The standardized data.
+    np.ndarray: The standardized data.
     """
-    central = (variables - variables.mean())
-    standardized = central / central.std()
-
-    # Return the standardized data as a DataFrame with the original index and columns
-    if isinstance(variables, pd.DataFrame):
-        return pd.DataFrame(standardized, index=variables.index, columns=variables.columns)
-    else:
-        return standardized
+    # Bereken het gemiddelde en de standaarddeviatie per rij
+    means = np.mean(variables, axis=1, keepdims=True)
+    stds = np.std(variables, axis=1, keepdims=True)
+    
+    # Standaardiseer de data per rij
+    standardized = (variables - means) / stds
+    
+    return standardized
 
 def RMSE(data: pd.DataFrame, estimation: pd.DataFrame):
     """

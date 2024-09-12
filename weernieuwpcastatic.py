@@ -31,11 +31,36 @@ DATE_VALIDATE_END = pd.Period('2023-11', freq='M')
 Y_train = filtered_df.loc[:, :DATE_TRAIN_END]  # Data until 2019-12
 Y_validate = filtered_df.loc[:, DATE_VALIDATE_START:DATE_VALIDATE_END]  # Data from 2020-01 to 2023-11
 
-# Standardize the training set and get the mean and std used for the transformation
-Y_train_std, train_mean, train_std = standardize(Y_train.values.T)
+# Standardize the datasets (row-wise, since rows represent time series)
+Y_train_std = standardize(Y_train.values)
+Y_validate_std = standardize(Y_validate.values)
 
-# Apply the same transformation to the validation set using the mean and std from the training set
-Y_validate_std, _, _ = standardize(Y_validate.values.T, mean=train_mean, std=train_std)
+# Check the standardization for Y_train (mean ≈ 0, std ≈ 1 per row)
+mean_per_row_train = np.mean(Y_train_std, axis=1)
+std_per_row_train = np.std(Y_train_std, axis=1)
+
+# Check the standardization for Y_validate (mean ≈ 0, std ≈ 1 per row)
+mean_per_row_validate = np.mean(Y_validate_std, axis=1)
+std_per_row_validate = np.std(Y_validate_std, axis=1)
+
+# Print the results for Y_train
+print("Mean per row after standardization (Y_train):", mean_per_row_train)
+print("Standard deviation per row after standardization (Y_train):", std_per_row_train)
+
+# Print the results for Y_validate
+print("Mean per row after standardization (Y_validate):", mean_per_row_validate)
+print("Standard deviation per row after standardization (Y_validate):", std_per_row_validate)
+
+# Check if the standardization was successful
+if np.allclose(mean_per_row_train, 0, atol=1e-5) and np.allclose(std_per_row_train, 1, atol=1e-5):
+    print("Y_train dataset is correctly standardized (mean ≈ 0, std ≈ 1).")
+else:
+    print("Y_train dataset is NOT correctly standardized!")
+
+if np.allclose(mean_per_row_validate, 0, atol=1e-5) and np.allclose(std_per_row_validate, 1, atol=1e-5):
+    print("Y_validate dataset is correctly standardized (mean ≈ 0, std ≈ 1).")
+else:
+    print("Y_validate dataset is NOT correctly standardized!")
 
 # Define the range of factors to test
 factor_range = range(5, 13)  # Example range from 5 to 12 factors
@@ -85,11 +110,17 @@ for num_factors in factor_range:
     else:
         print(f"Warning: Shift detected in the factors mu(varepsilon) != 0) for {num_factors} factors.")
 
-    # Voorspellingen voor de validatieset zonder de trainingsset bij te werken
-    for date in Y_validate.columns:
-        # Voorspel de volgende set factoren voor de validatiemaand
-        factor_forecast = model.factor_forecast(date.strftime('%Y-%m'), scenarios=1)
-        
+    # Variabelen om de voorspellingen voor toekomstige tijdstappen op te slaan
+    current_train_data = Y_train_std
+    current_index = list(Y_train.columns)
+
+    # Voorspellingen voor tijdstappen t+1 tot t+6
+    for t in range(1, 3):
+        next_timestamp = current_index[-1] + 1  # Bereken volgende tijdstempel
+        next_timestamp_str = next_timestamp.strftime('%Y-%m')
+
+        # Voorspel de volgende set factoren
+        factor_forecast = model.factor_forecast(next_timestamp_str, scenarios=1)
         if factor_forecast.shape[1] != num_factors:
             raise ValueError(f"Expected {num_factors} features, got {factor_forecast.shape[1]} features")
         
@@ -101,7 +132,34 @@ for num_factors in factor_range:
         
         # Voeg de voorspelde variabelen toe aan de matrix in de dictionary
         predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict.get(num_factors, np.empty((Y_train_std.shape[0], 0))), predicted_variables.T))
-
+        
+        # Voeg de voorspelde waarden voor deze stap toe aan de trainingsdata
+        extended_train_data = np.hstack((current_train_data, predicted_variables.T))
+        
+        # Standaardiseer opnieuw de uitgebreide dataset
+        extended_train_data_std = standardize(extended_train_data)
+        
+        # Update de index met een nieuwe tijdstempel
+        extended_index = current_index + [next_timestamp]
+        
+        # Zet de uitgebreide dataset om naar een pandas DataFrame met een correcte index
+        extended_train_df = pd.DataFrame(extended_train_data_std, index=Y_train.index, columns=extended_index)
+        
+        # Fit het model opnieuw met de uitgebreide trainingsset
+        model = DynamicFactorModel(extended_train_df, num_factors)
+        model.std_data = extended_train_data_std.T
+        model.apply_pca()
+        model.yw_estimation()
+        
+        # Hertrain het ElasticNet-model met de uitgebreide trainingsdata
+        fac_train_extended = model.factors.T
+        data_train_extended = extended_train_data_std.T
+        model.enet_fit(data_train_extended, fac_train_extended)
+        
+        # Update current data voor de volgende iteratie
+        current_train_data = extended_train_data_std
+        current_index = extended_index
+        
     # Bereken RMSE en R² voor in-sample en test data
     rmse_value_in_sample = RMSE(data_train, y_hat_train)
     rmse_value_test_sample = RMSE(data_test, y_hat_test)
