@@ -41,20 +41,6 @@ Y_train_std = (Y_train.values - mean_train) / std_train
 # Gebruik de mean en std van Y_train om Y_validate te standaardiseren
 Y_validate_std = (Y_validate.values - mean_train) / std_train
 
-# Test het gemiddelde en de standaarddeviatie van de gestandaardiseerde Y_validate
-mean_per_row_validate = np.mean(Y_validate_std, axis=1)
-std_per_row_validate = np.std(Y_validate_std, axis=1)
-
-# Print de resultaten voor Y_validate
-print("Mean per row after standardization (Y_validate):", mean_per_row_validate)
-print("Standard deviation per row after standardization (Y_validate):", std_per_row_validate)
-
-# Check if the standardization was successful
-if np.allclose(mean_per_row_validate, 0, atol=1e-5) and np.allclose(std_per_row_validate, 1, atol=1e-5):
-    print("Y_validate dataset is correctly standardized based on Y_train (mean ≈ 0, std ≈ 1).")
-else:
-    print("Y_validate dataset is NOT correctly standardized based on Y_train!")
-
 # Define the range of factors to test
 factor_range = range(5, 13)  # Example range from 5 to 12 factors
 
@@ -73,7 +59,7 @@ for num_factors in factor_range:
     
     # Fit the Dynamic Factor Model and apply PCA
     model.std_data = Y_train_std.T
-    model.apply_pca()
+    model.apply_pca()  # Extract factors from the original training data
     model.yw_estimation()
     
     # Use 80% of the training data for training and 20% for testing
@@ -85,30 +71,20 @@ for num_factors in factor_range:
     
     # Fit ElasticNet model
     B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
-    
-    # Validate model on in-sample data
     y_hat_train = model.enet_predict(fac_train)
     y_hat_test = model.enet_predict(fac_test)
-    
-    # Calculate residuals
+
+    # Debugging the residuals
     residuals_train = data_train - y_hat_train
     residuals_test = data_test - y_hat_test
+    print(f"Mean residuals_train for {num_factors} factors: {np.mean(residuals_train, axis=0)}")
     
-    # Check if the mean of the residuals (mu(varepsilon) is zero
-    residuals_mean = np.mean(residuals_train, axis=0)
-    print(f"Mean of residuals for {num_factors} factors: {residuals_mean}")
-
-    if np.allclose(residuals_mean, 0, atol=1e-5):
-        print(f"No shift detected in the factors mu(varepsilon) = 0) for {num_factors} factors.")
-    else:
-        print(f"Warning: Shift detected in the factors mu(varepsilon) != 0) for {num_factors} factors.")
-
     # Variabelen om de voorspellingen voor toekomstige tijdstappen op te slaan
     current_train_data = Y_train_std
     current_index = list(Y_train.columns)
 
-    # Voorspellingen voor tijdstappen t+1 tot t+6
-    for t in range(1, 3):
+    # Voorspellingen voor t+1 tot t+48
+    for t in range(1, 20):
         next_timestamp = current_index[-1] + 1  # Bereken volgende tijdstempel
         next_timestamp_str = next_timestamp.strftime('%Y-%m')
 
@@ -123,6 +99,9 @@ for num_factors in factor_range:
         # Voorspel de originele variabelen op basis van de voorspelde factoren
         predicted_variables = model.enet_predict(factor_forecast.reshape(1, -1))
         
+        # Beperk voorspelde variabelen om instabiliteit te voorkomen
+        predicted_variables = np.clip(predicted_variables, -3, 3)  # Limiteer de waarden tot een redelijk bereik
+
         # Voeg de voorspelde variabelen toe aan de matrix in de dictionary
         predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict.get(num_factors, np.empty((Y_train_std.shape[0], 0))), predicted_variables.T))
         
@@ -135,16 +114,12 @@ for num_factors in factor_range:
         # Update de index met een nieuwe tijdstempel
         extended_index = current_index + [next_timestamp]
         
-        # Zet de uitgebreide dataset om naar een pandas DataFrame met een correcte index
-        extended_train_df = pd.DataFrame(extended_train_data_std, index=Y_train.index, columns=extended_index)
-        
-        # Fit het model opnieuw met de uitgebreide trainingsset
-        model = DynamicFactorModel(extended_train_df, num_factors)
-        model.std_data = extended_train_data_std.T
+        # Hergebruik de uitgebreid getrainde set om nieuwe factoren te extraheren
+        model = DynamicFactorModel(extended_train_data_std.T, num_factors)
         model.apply_pca()
         model.yw_estimation()
         
-        # Hertrain het ElasticNet-model met de uitgebreide trainingsdata
+        # Hertrain ElasticNet met de uitgebreide dataset
         fac_train_extended = model.factors.T
         data_train_extended = extended_train_data_std.T
         model.enet_fit(data_train_extended, fac_train_extended)
@@ -180,36 +155,6 @@ for num_factors in factor_range:
         'BIC': bic_value
     })
 
-    # Check eigenvalues of the Yule-Walker matrix A (phi)
-    eigenvalues, _ = np.linalg.eig(model.phi[1:])  # Matrix A is phi[1:], excluding the intercept
-    print(f"Eigenvalues of the matrix A (phi[1:]) for {num_factors} factors: {eigenvalues}")
-
-    # Check if all eigenvalues have an absolute value less than 1
-    if np.all(np.abs(eigenvalues) < 1):
-        print(f"All eigenvalues for {num_factors} factors are within the unit circle. Model is stable.")
-    else:
-        print(f"Warning: Some eigenvalues for {num_factors} factors are outside the unit circle. Model might be unstable.")
-
-    # Plot residuals
-    plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.scatter(y_hat_train.flatten(), residuals_train.flatten())
-    plt.title(f'Residuals vs Fitted (In-sample Train) - {num_factors} Factors')
-    plt.xlabel('Fitted values')
-    plt.ylabel('Residuals')
-    plt.axhline(0, color='red', linestyle='--')
-    plt.subplot(1, 2, 2)
-    plt.scatter(y_hat_test.flatten(), residuals_test.flatten())
-    plt.title(f'Residuals vs Fitted (In-sample Test) - {num_factors} Factors')
-    plt.xlabel('Fitted values')
-    plt.ylabel('Residuals')
-    plt.axhline(0, color='red', linestyle='--')
-    plt.tight_layout()
-    
-    # Save the plot instead of showing it
-    plt.savefig(f"{plot_dir}/residuals_{num_factors}_factors.png")
-    plt.close()  # Close the figure to free up memory
-    
 # Converteer de resultatenlijsten naar DataFrames voor eventuele verdere analyse of opslag
 results_df = pd.DataFrame(results)
 results_path = os.path.join(save_directory, 'results_PCAstatic_with_AIC_BIC_AdjustedR2_LogLikelihood_Residuals.xlsx')
