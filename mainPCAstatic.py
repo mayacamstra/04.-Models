@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
-from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
+from utils import RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model import DynamicFactorModel
 
 # Zorg ervoor dat de directory bestaat waar we de resultaten gaan opslaan
@@ -31,9 +31,33 @@ DATE_VALIDATE_END = pd.Period('2023-11', freq='M')
 Y_train = filtered_df.loc[:, :DATE_TRAIN_END]  # Data until 2019-12
 Y_validate = filtered_df.loc[:, DATE_VALIDATE_START:DATE_VALIDATE_END]  # Data from 2020-01 to 2023-11
 
-# Standardize the datasets
-Y_train_std = standardize(Y_train.values.T).T
-Y_validate_std = standardize(Y_validate.values.T).T
+# Bereken de mean en std van Y_train voor het standaardiseren
+mean_train = np.mean(Y_train.values, axis=1, keepdims=True)
+std_train = np.std(Y_train.values, axis=1, keepdims=True)
+
+print("Mean per row (Y_train):", mean_train.flatten())
+print("Standard deviation per row (Y_train):", std_train.flatten())
+
+# Standaardiseer Y_train met de eigen mean en std
+Y_train_std = (Y_train.values - mean_train) / std_train
+print(f"First 5 rows of Y_train_std after standardization:\n{Y_train_std[:5, :5]}")
+
+# Gebruik de mean en std van Y_train om Y_validate te standaardiseren
+Y_validate_std = (Y_validate.values - mean_train) / std_train
+
+# Test het gemiddelde en de standaarddeviatie van de gestandaardiseerde Y_validate
+mean_per_row_validate = np.mean(Y_validate_std, axis=1)
+std_per_row_validate = np.std(Y_validate_std, axis=1)
+
+# Print de resultaten voor Y_validate
+print("Mean per row after standardization (Y_validate):", mean_per_row_validate)
+print("Standard deviation per row after standardization (Y_validate):", std_per_row_validate)
+
+# Check if the standardization was successful
+if np.allclose(mean_per_row_validate, 0, atol=1e-5) and np.allclose(std_per_row_validate, 1, atol=1e-5):
+    print("Y_validate dataset is correctly standardized based on Y_train (mean ≈ 0, std ≈ 1).")
+else:
+    print("Y_validate dataset is NOT correctly standardized based on Y_train!")
 
 # Define the range of factors to test
 factor_range = range(5, 13)  # Example range from 5 to 12 factors
@@ -53,8 +77,12 @@ for num_factors in factor_range:
     
     # Fit the Dynamic Factor Model and apply PCA
     model.std_data = Y_train_std.T
+    print(f"Shape of std_data for {num_factors} factors:", model.std_data.shape)
     model.apply_pca()
     model.yw_estimation()
+    
+    # Debug the factors after PCA
+    print(f"Shape of factors before VAR for {num_factors} factors: {model.factors.shape}")    
     
     # Use 80% of the training data for training and 20% for testing
     train_split_index = int(model.factors.shape[1] * 0.8)
@@ -65,7 +93,8 @@ for num_factors in factor_range:
     
     # Fit ElasticNet model
     B_matrix, r2_insample, intercept = model.enet_fit(data_train, fac_train)
-    
+    print(f"ElasticNet in-sample R2 for {num_factors} factors: {r2_insample}")
+        
     # Validate model on in-sample data
     y_hat_train = model.enet_predict(fac_train)
     y_hat_test = model.enet_predict(fac_test)
@@ -74,9 +103,13 @@ for num_factors in factor_range:
     residuals_train = data_train - y_hat_train
     residuals_test = data_test - y_hat_test
     
+    # Debug residuals
+    print(f"Residuals_train shape for {num_factors} factors: {residuals_train.shape}")
+    print(f"Mean residuals_train for {num_factors} factors: {np.mean(residuals_train, axis=0)}")
+    
     # Check if the mean of the residuals (mu(varepsilon) is zero
     residuals_mean = np.mean(residuals_train, axis=0)
-    print(f"Mean of residuals for {num_factors} factors: {residuals_mean}")
+    # print(f"Mean of residuals for {num_factors} factors: {residuals_mean}")
 
     if np.allclose(residuals_mean, 0, atol=1e-5):
         print(f"No shift detected in the factors mu(varepsilon) = 0) for {num_factors} factors.")
@@ -87,8 +120,8 @@ for num_factors in factor_range:
     current_train_data = Y_train_std
     current_index = list(Y_train.columns)
 
-    # Voorspellingen voor tijdstappen t+1 tot t+6
-    for t in range(1, 3):
+    # Voorspellingen voor tijdstappen t+1 tot t+48
+    for t in range(1, 20):
         next_timestamp = current_index[-1] + 1  # Bereken volgende tijdstempel
         next_timestamp_str = next_timestamp.strftime('%Y-%m')
 
@@ -102,6 +135,9 @@ for num_factors in factor_range:
         
         # Voorspel de originele variabelen op basis van de voorspelde factoren
         predicted_variables = model.enet_predict(factor_forecast.reshape(1, -1))
+                
+        # Debug voorspelde variabelen
+        print(f"Predicted variables shape at t={t} for {num_factors} factors: {predicted_variables.shape}")
         
         # Voeg de voorspelde variabelen toe aan de matrix in de dictionary
         predicted_variables_dict[num_factors] = np.hstack((predicted_variables_dict.get(num_factors, np.empty((Y_train_std.shape[0], 0))), predicted_variables.T))
@@ -109,8 +145,11 @@ for num_factors in factor_range:
         # Voeg de voorspelde waarden voor deze stap toe aan de trainingsdata
         extended_train_data = np.hstack((current_train_data, predicted_variables.T))
         
-        # Standaardiseer opnieuw de uitgebreide dataset
-        extended_train_data_std = standardize(extended_train_data.T).T
+        # Standaardiseer opnieuw de uitgebreide dataset met dezelfde mean en std als Y_train
+        extended_train_data_std = (extended_train_data - mean_train) / std_train
+        
+        # Debug the extended training data
+        print(f"Extended training data shape at t={t}: {extended_train_data.shape}")
         
         # Update de index met een nieuwe tijdstempel
         extended_index = current_index + [next_timestamp]
@@ -162,7 +201,7 @@ for num_factors in factor_range:
 
     # Check eigenvalues of the Yule-Walker matrix A (phi)
     eigenvalues, _ = np.linalg.eig(model.phi[1:])  # Matrix A is phi[1:], excluding the intercept
-    print(f"Eigenvalues of the matrix A (phi[1:]) for {num_factors} factors: {eigenvalues}")
+    # print(f"Eigenvalues of the matrix A (phi[1:]) for {num_factors} factors: {eigenvalues}")
 
     # Check if all eigenvalues have an absolute value less than 1
     if np.all(np.abs(eigenvalues) < 1):

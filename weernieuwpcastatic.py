@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
-from utils import standardize, RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
+from utils import RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model import DynamicFactorModel
 
 # Zorg ervoor dat de directory bestaat waar we de resultaten gaan opslaan
@@ -31,36 +31,29 @@ DATE_VALIDATE_END = pd.Period('2023-11', freq='M')
 Y_train = filtered_df.loc[:, :DATE_TRAIN_END]  # Data until 2019-12
 Y_validate = filtered_df.loc[:, DATE_VALIDATE_START:DATE_VALIDATE_END]  # Data from 2020-01 to 2023-11
 
-# Standardize the datasets (row-wise, since rows represent time series)
-Y_train_std = standardize(Y_train.values)
-Y_validate_std = standardize(Y_validate.values)
+# Bereken de mean en std van Y_train voor het standaardiseren
+mean_train = np.mean(Y_train.values, axis=1, keepdims=True)
+std_train = np.std(Y_train.values, axis=1, keepdims=True)
 
-# Check the standardization for Y_train (mean ≈ 0, std ≈ 1 per row)
-mean_per_row_train = np.mean(Y_train_std, axis=1)
-std_per_row_train = np.std(Y_train_std, axis=1)
+# Standaardiseer Y_train met de eigen mean en std
+Y_train_std = (Y_train.values - mean_train) / std_train
 
-# Check the standardization for Y_validate (mean ≈ 0, std ≈ 1 per row)
+# Gebruik de mean en std van Y_train om Y_validate te standaardiseren
+Y_validate_std = (Y_validate.values - mean_train) / std_train
+
+# Test het gemiddelde en de standaarddeviatie van de gestandaardiseerde Y_validate
 mean_per_row_validate = np.mean(Y_validate_std, axis=1)
 std_per_row_validate = np.std(Y_validate_std, axis=1)
 
-# Print the results for Y_train
-print("Mean per row after standardization (Y_train):", mean_per_row_train)
-print("Standard deviation per row after standardization (Y_train):", std_per_row_train)
-
-# Print the results for Y_validate
+# Print de resultaten voor Y_validate
 print("Mean per row after standardization (Y_validate):", mean_per_row_validate)
 print("Standard deviation per row after standardization (Y_validate):", std_per_row_validate)
 
 # Check if the standardization was successful
-if np.allclose(mean_per_row_train, 0, atol=1e-5) and np.allclose(std_per_row_train, 1, atol=1e-5):
-    print("Y_train dataset is correctly standardized (mean ≈ 0, std ≈ 1).")
-else:
-    print("Y_train dataset is NOT correctly standardized!")
-
 if np.allclose(mean_per_row_validate, 0, atol=1e-5) and np.allclose(std_per_row_validate, 1, atol=1e-5):
-    print("Y_validate dataset is correctly standardized (mean ≈ 0, std ≈ 1).")
+    print("Y_validate dataset is correctly standardized based on Y_train (mean ≈ 0, std ≈ 1).")
 else:
-    print("Y_validate dataset is NOT correctly standardized!")
+    print("Y_validate dataset is NOT correctly standardized based on Y_train!")
 
 # Define the range of factors to test
 factor_range = range(5, 13)  # Example range from 5 to 12 factors
@@ -136,8 +129,8 @@ for num_factors in factor_range:
         # Voeg de voorspelde waarden voor deze stap toe aan de trainingsdata
         extended_train_data = np.hstack((current_train_data, predicted_variables.T))
         
-        # Standaardiseer opnieuw de uitgebreide dataset
-        extended_train_data_std = standardize(extended_train_data)
+        # Standaardiseer opnieuw de uitgebreide dataset met dezelfde mean en std als Y_train
+        extended_train_data_std = (extended_train_data - mean_train) / std_train
         
         # Update de index met een nieuwe tijdstempel
         extended_index = current_index + [next_timestamp]
