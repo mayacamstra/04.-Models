@@ -49,12 +49,6 @@ Y_train_std = (Y_train.values - mean_train) / std_train
 # Debug: print de eerste paar rijen van de gestandaardiseerde Y_train
 print(f"First 5 rows of Y_train_std after standardization:\n{Y_train_std[:5, :5]}")
 
-# Gebruik de mean en std van Y_train om Y_validate te standaardiseren
-Y_validate_std = (Y_validate.values - mean_train) / std_train
-
-# Debug: print de eerste paar rijen van de gestandaardiseerde Y_validate
-print(f"First 5 rows of Y_validate_std after standardization:\n{Y_validate_std[:5, :5]}")
-
 # Controleer het gemiddelde en de standaarddeviatie van Y_train_std per rij
 mean_per_row_train = np.mean(Y_train_std, axis=1)
 std_per_row_train = np.std(Y_train_std, axis=1)
@@ -62,16 +56,17 @@ std_per_row_train = np.std(Y_train_std, axis=1)
 print(f"Mean per row for Y_train_std (expected ≈ 0): {mean_per_row_train}")
 print(f"Standard deviation per row for Y_train_std (expected ≈ 1): {std_per_row_train}")
 
-# Controleer het gemiddelde en de standaarddeviatie van Y_validate_std per rij
-mean_per_row_validate = np.mean(Y_validate_std, axis=1)
-std_per_row_validate = np.std(Y_validate_std, axis=1)
-
-print(f"Mean per row for Y_validate_std (expected different from 0): {mean_per_row_validate}")
-print(f"Standard deviation per row for Y_validate_std (should differ from Y_train): {std_per_row_validate}")
-
 # --- Actiepunt 1: Controleer de variantie van de gestandaardiseerde data ---
 variance_per_variable = np.var(Y_train_std, axis=1)
 print(f"Variance per variable (Y_train_std): {variance_per_variable}")
+
+# Zet Y_train_std om naar een DataFrame voor export
+# Y_train_std_df = pd.DataFrame(Y_train_std, index=Y_train.index, columns=Y_train.columns)
+
+# Exporteer Y_train_std naar Excel
+# output_excel_path = os.path.join(save_directory, 'Y_train_std.xlsx')
+# Y_train_std_df.to_excel(output_excel_path, index=True)  # Sla op met rijenindex
+# print(f"Gestandaardiseerde Y_train is opgeslagen naar: {output_excel_path}")
 
 # Define the number of factors to extract
 num_factors = 5  # Start met 5 factoren, je kunt dit later aanpassen
@@ -86,20 +81,20 @@ model.apply_pca()
 print(f"Shape of extracted factors from PCA: {model.factors.shape}")
 
 # Optioneel: Print enkele van de geëxtraheerde factoren
-print(f"First few rows of extracted factors:\n{model.factors[:5, :5]}")
+# print(f"First few rows of extracted factors:\n{model.factors[:5, :5]}")
 
 # --- Actiepunt 2: Analyseer de variantie van elke PCA-component ---
-explained_variance_ratio = model.pca_model.explained_variance_ratio_
-print(f"Explained variance ratio per component: {explained_variance_ratio}")
+# explained_variance_ratio = model.pca_model.explained_variance_ratio_
+# print(f"Explained variance ratio per component: {explained_variance_ratio}")
 
 # Voer Yule-Walker (VAR) schatting uit op de factoren
-model.yw_estimation()
+# model.yw_estimation()
 
 # Debug: Print de Yule-Walker schattingen (phi-matrix)
-print(f"Yule-Walker estimation (phi matrix):\n{model.phi}")
+# print(f"Yule-Walker estimation (phi matrix):\n{model.phi}")
 
 # Controleer de vorm van de phi-matrix
-print(f"Shape of phi matrix: {model.phi.shape}")
+# print(f"Shape of phi matrix: {model.phi.shape}")
 
 # Optioneel: Test voorspellende kracht door factoren te voorspellen voor toekomstige tijdstappen
 # Let op: dit zou verder kunnen gaan in een voorspelling van toekomstige factoren
