@@ -105,17 +105,36 @@ if np.all(np.abs(eigenvalues) < 1):
     print(f"All eigenvalues for {num_factors} factors are within the unit circle. Model is stable.")
 else:
     print(f"Warning: Some eigenvalues for {num_factors} factors are outside the unit circle. Model might be unstable.")
+    
+# Begin de iteratieve voorspelling met herberekende Phi na elke stap
+num_steps = 3  # Aantal stappen vooruit dat je wilt voorspellen
+all_predicted_factors = []
 
-# Voorspel factoren voor de komende 3 tijdstappen (bijvoorbeeld)
-predicted_factors = model.factor_forecast(num_steps=3)
+for step in range(num_steps):
+    # Voorspel de factoren voor de volgende tijdstap
+    next_factors = model.factor_forecast(num_steps=1)  # Voorspel slechts 1 stap vooruit
+    
+    # Voeg de voorspelde factoren toe aan de bestaande factor dataset
+    model.factors = np.vstack([model.factors, next_factors])
+    
+    # Voeg de voorspelde factoren toe aan de lijst met voorspellingen
+    all_predicted_factors.append(next_factors)
+    
+    # Herbereken de Yule-Walker schatting met de nieuwe factoren
+    model.yw_estimation()
+    
+    # Controleer of de nieuwe Phi matrix stabiel is
+    eigenvalues, _ = np.linalg.eig(model.phi[1:])
+    if np.all(np.abs(eigenvalues) < 1):
+        print(f"Step {step+1}: Eigenvalues are within the unit circle. Model is stable.")
+    else:
+        print(f"Step {step+1}: Warning: Some eigenvalues are outside the unit circle. Model might be unstable.")
+    
+    # Debug: Print de nieuwe voorspelde factoren
+    print(f"Predicted factors for step {step+1}:\n{next_factors}")
 
-# Debug: Print de voorspelde factoren voor de volgende tijdstappen
-print(f"Voorspelde factoren voor de volgende 3 stappen:\n{predicted_factors}")
+# Zet de voorspelde factoren om naar een Pandas DataFrame voor export of verdere analyse
+predicted_factors_df = pd.DataFrame(np.vstack(all_predicted_factors), columns=[f"Factor_{i+1}" for i in range(num_factors)])
 
-# Optioneel: Test voorspellende kracht door factoren te voorspellen voor toekomstige tijdstappen
-# Let op: dit zou verder kunnen gaan in een voorspelling van toekomstige factoren
-# future_date = '2024-12'  # Bijvoorbeeld, voorspel tot december 2024
-# factor_forecast = model.factor_forecast(future_date)
-
-# Debug: Print de voorspelde factoren voor de toekomstige datum
-# print(f"Factor forecast for {future_date}:\n{factor_forecast}")
+# Debug: print de volledige set voorspelde factoren
+print(f"All predicted factors:\n{predicted_factors_df}")
