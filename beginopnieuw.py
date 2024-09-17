@@ -46,15 +46,11 @@ print(f"Standard deviation per row (Y_train): {std_train.flatten()}")
 # Standaardiseer Y_train met de eigen mean en std
 Y_train_std = (Y_train.values - mean_train) / std_train
 
+# Zet Y_train_std terug naar een Pandas DataFrame met de originele index en kolommen
+Y_train_std_df = pd.DataFrame(Y_train_std, index=Y_train.index, columns=Y_train.columns)
+
 # Debug: print de eerste paar rijen van de gestandaardiseerde Y_train
 print(f"First 5 rows of Y_train_std after standardization:\n{Y_train_std[:5, :5]}")
-
-# Controleer het gemiddelde en de standaarddeviatie van Y_train_std per rij
-mean_per_row_train = np.mean(Y_train_std, axis=1)
-std_per_row_train = np.std(Y_train_std, axis=1)
-
-print(f"Mean per row for Y_train_std (expected ≈ 0): {mean_per_row_train}")
-print(f"Standard deviation per row for Y_train_std (expected ≈ 1): {std_per_row_train}")
 
 # --- Actiepunt 1: Controleer de variantie van de gestandaardiseerde data ---
 variance_per_variable = np.var(Y_train_std, axis=1)
@@ -80,21 +76,51 @@ model.apply_pca()
 # Debug: Print de vorm van de geëxtraheerde factoren
 print(f"Shape of extracted factors from PCA: {model.factors.shape}")
 
-# Optioneel: Print enkele van de geëxtraheerde factoren
-# print(f"First few rows of extracted factors:\n{model.factors[:5, :5]}")
+# Zet de geëxtraheerde factoren om naar een DataFrame
+# factors_df = pd.DataFrame(model.factors, columns=[f"Factor_{i+1}" for i in range(num_factors)])
 
-# --- Actiepunt 2: Analyseer de variantie van elke PCA-component ---
-# explained_variance_ratio = model.pca_model.explained_variance_ratio_
-# print(f"Explained variance ratio per component: {explained_variance_ratio}")
+# Exporteer de factoren naar Excel
+# factors_output_path = os.path.join(save_directory, 'factors5.xlsx')
+# factors_df.to_excel(factors_output_path, index=False)
+
+# print(f"De geëxtraheerde factoren zijn opgeslagen naar: {factors_output_path}")
 
 # Voer Yule-Walker (VAR) schatting uit op de factoren
-# model.yw_estimation()
+model.yw_estimation()
 
 # Debug: Print de Yule-Walker schattingen (phi-matrix)
-# print(f"Yule-Walker estimation (phi matrix):\n{model.phi}")
+print(f"Yule-Walker estimation (phi matrix):\n{model.phi}")
 
 # Controleer de vorm van de phi-matrix
-# print(f"Shape of phi matrix: {model.phi.shape}")
+print(f"Shape of phi matrix: {model.phi.shape}")
+
+# Excludeer de eerste rij (intercept) van phi om alleen met de dynamische matrix te werken
+eigenvalues, _ = np.linalg.eig(model.phi[1:])  # phi[1:] verwijdert de intercept
+
+# Print de eigenwaarden
+# print(f"Eigenvalues of the matrix A (phi[1:]) for {num_factors} factors: {eigenvalues}")
+
+# Controleer of alle eigenwaarden een absolute waarde hebben kleiner dan 1
+if np.all(np.abs(eigenvalues) < 1):
+    print(f"All eigenvalues for {num_factors} factors are within the unit circle. Model is stable.")
+else:
+    print(f"Warning: Some eigenvalues for {num_factors} factors are outside the unit circle. Model might be unstable.")
+
+# Voorspel de factoren voor één tijdstap vooruit
+# Gebruik de laatst beschikbare tijdstap in je data als uitgangspunt
+last_time_step = Y_train.columns[-1]  # De laatste tijdstap in de Y_train dataset
+
+# Controleer of last_time_step een pandas Period is, anders converteer je het
+if not isinstance(last_time_step, pd.Period):
+    last_time_step = pd.to_datetime(last_time_step).to_period('M')
+
+next_time_step = last_time_step + 1  # Voorspel de volgende tijdstap
+
+# Voorspel factoren voor de volgende maand
+predicted_factors = model.factor_forecast(future_date=next_time_step)
+
+# Debug: Print de voorspelde factoren voor de volgende tijdstap
+print(f"Voorspelde factoren voor {next_time_step}:\n{predicted_factors}")
 
 # Optioneel: Test voorspellende kracht door factoren te voorspellen voor toekomstige tijdstappen
 # Let op: dit zou verder kunnen gaan in een voorspelling van toekomstige factoren

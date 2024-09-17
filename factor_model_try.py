@@ -10,6 +10,12 @@ from datetime import datetime
 
 class DynamicFactorModel:
     def __init__(self, df_data, num_factors, method='PCA'):
+        
+        # Zorg ervoor dat df_data een pandas DataFrame is
+        if isinstance(df_data, np.ndarray):
+            # Zet de numpy array om naar een DataFrame, gebruik makend van fictieve index en kolommen
+            df_data = pd.DataFrame(df_data)       
+        
         self.df_data = df_data
         self.num_factors = num_factors
         self.method = method
@@ -76,19 +82,22 @@ class DynamicFactorModel:
         """
         Perform Yule-Walker estimation on the factors to fit a VAR model.
         """
-        # Debug: Check the shape of factors
+        # Debug: Check the shape of factors before transposition
         print(f"Shape of factors before VAR: {self.factors.shape}")
 
-        # Check if factors are 2D (num_factors, num_time_points) and transpose accordingly
-        if self.factors.ndim == 1:
-            raise ValueError("Factors should be a 2D array but received a 1D array.")
-        elif self.factors.shape[0] != self.num_factors:
-            raise ValueError(f"Expected {self.num_factors} factors, got {self.factors.shape[0]}")
+        # Transponeer de factorenmatrix om de juiste dimensies te krijgen (num_factors, num_time_points)
+        factors_transposed = self.factors.T  # Maak de matrix (5, 300)
 
-        # The factors need to be transposed to fit (time_points, num_factors)
-        model = sm.tsa.VAR(self.factors.T)
+        # Debug: Controleer de nieuwe vorm
+        print(f"Shape of factors after transposition: {factors_transposed.shape}")
+
+        # Nu passen we het VAR-model toe op de getransponeerde factoren
+        model = sm.tsa.VAR(factors_transposed)
         results = model.fit(1)
         self.phi = results.params
+
+        # Debug: Print de geschatte phi-matrix
+        print(f"Yule-Walker estimation (phi matrix):\n{self.phi}")
 
     def enet_fit(self, data_train, fac_train):
         """
