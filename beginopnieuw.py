@@ -106,21 +106,11 @@ if np.all(np.abs(eigenvalues) < 1):
 else:
     print(f"Warning: Some eigenvalues for {num_factors} factors are outside the unit circle. Model might be unstable.")
 
-# Voorspel de factoren voor één tijdstap vooruit
-# Gebruik de laatst beschikbare tijdstap in je data als uitgangspunt
-last_time_step = Y_train.columns[-1]  # De laatste tijdstap in de Y_train dataset
+# Voorspel factoren voor de komende 3 tijdstappen (bijvoorbeeld)
+predicted_factors = model.factor_forecast(num_steps=3)
 
-# Controleer of last_time_step een pandas Period is, anders converteer je het
-if not isinstance(last_time_step, pd.Period):
-    last_time_step = pd.to_datetime(last_time_step).to_period('M')
-
-next_time_step = last_time_step + 1  # Voorspel de volgende tijdstap
-
-# Voorspel factoren voor de volgende maand
-predicted_factors = model.factor_forecast(future_date=next_time_step)
-
-# Debug: Print de voorspelde factoren voor de volgende tijdstap
-print(f"Voorspelde factoren voor {next_time_step}:\n{predicted_factors}")
+# Debug: Print de voorspelde factoren voor de volgende tijdstappen
+print(f"Voorspelde factoren voor de volgende 3 stappen:\n{predicted_factors}")
 
 # Optioneel: Test voorspellende kracht door factoren te voorspellen voor toekomstige tijdstappen
 # Let op: dit zou verder kunnen gaan in een voorspelling van toekomstige factoren
