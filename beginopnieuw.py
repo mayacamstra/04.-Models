@@ -125,3 +125,8 @@ print(f"Predicted factors saved to: {factor_output_path}")
 variables_output_path = os.path.join(save_directory, 'predicted_variables.xlsx')
 predicted_variables_df.to_excel(variables_output_path, index=False)
 print(f"Predicted variables saved to: {variables_output_path}")
+
+# Exporteer alleen Y_train naar Excel
+train_output_path = os.path.join(save_directory, 'Y_train.xlsx')
+Y_train.to_excel(train_output_path)
+print(f"Y_train saved to: {train_output_path}")
