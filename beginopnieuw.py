@@ -86,65 +86,43 @@ if np.all(np.abs(eigenvalues) < 1):
 else:
     print(f"Warning: Some initial eigenvalues are outside the unit circle. Model might be unstable.")
 
-# --- Begin de iteratieve voorspelling zonder loop, voor 3 stappen vooruit ---
+# --- Begin de iteratieve voorspelling voor 40 stappen vooruit ---
 print("\n--- Iterative factor prediction process ---")
+num_steps = 40  # Aantal tijdstappen om vooruit te voorspellen
+all_predicted_factors = []
 
-# Stap 1: Voorspel de eerste tijdstap vooruit
-print("Step 1: Forecasting the next time step")
-next_factors_step_1 = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
-print(f"Shape of next_factors_step_1: {next_factors_step_1.shape}")
+for step in range(1, num_steps + 1):
+    print(f"Step {step}: Forecasting the next time step")
+    
+    # Voorspel de volgende tijdstap vooruit
+    next_factors = model.factor_forecast(num_steps=1)
+    print(f"Shape of next_factors at step {step}: {next_factors.shape}")
 
-# Voeg de voorspelling toe aan de bestaande factoren
-model.factors = np.vstack([model.factors, next_factors_step_1])
-print(f"Shape of model.factors after step 1: {model.factors.shape}")
+    # Voeg de voorspelling toe aan de bestaande factoren
+    model.factors = np.vstack([model.factors, next_factors])
+    print(f"Shape of model.factors after step {step}: {model.factors.shape}")
 
-# Herbereken Yule-Walker
-model.yw_estimation()
-eigenvalues_step_1, _ = np.linalg.eig(model.phi[1:])
-if np.all(np.abs(eigenvalues_step_1) < 1):
-    print(f"Step 1: Eigenvalues are within the unit circle. Model is stable.")
-else:
-    print(f"Step 1: Warning: Some eigenvalues are outside the unit circle. Model might be unstable.")
+    # Bewaar de voorspelde factoren voor later gebruik
+    all_predicted_factors.append(next_factors)
 
-# Stap 2: Voorspel de tweede tijdstap vooruit
-print("Step 2: Forecasting the next time step")
-next_factors_step_2 = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
-print(f"Shape of next_factors_step_2: {next_factors_step_2.shape}")
-
-# Voeg de voorspelling toe aan de bestaande factoren
-model.factors = np.vstack([model.factors, next_factors_step_2])
-print(f"Shape of model.factors after step 2: {model.factors.shape}")
-
-# Herbereken Yule-Walker
-model.yw_estimation()
-eigenvalues_step_2, _ = np.linalg.eig(model.phi[1:])
-if np.all(np.abs(eigenvalues_step_2) < 1):
-    print(f"Step 2: Eigenvalues are within the unit circle. Model is stable.")
-else:
-    print(f"Step 2: Warning: Some eigenvalues are outside the unit circle. Model might be unstable.")
-
-# Stap 3: Voorspel de derde tijdstap vooruit
-print("Step 3: Forecasting the next time step")
-next_factors_step_3 = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
-print(f"Shape of next_factors_step_3: {next_factors_step_3.shape}")
-
-# Voeg de voorspelling toe aan de bestaande factoren
-model.factors = np.vstack([model.factors, next_factors_step_3])
-print(f"Shape of model.factors after step 3: {model.factors.shape}")
-
-# Herbereken Yule-Walker
-model.yw_estimation()
-eigenvalues_step_3, _ = np.linalg.eig(model.phi[1:])
-if np.all(np.abs(eigenvalues_step_3) < 1):
-    print(f"Step 3: Eigenvalues are within the unit circle. Model is stable.")
-else:
-    print(f"Step 3: Warning: Some eigenvalues are outside the unit circle. Model might be unstable.")
+    # Herbereken Yule-Walker
+    model.yw_estimation()
+    eigenvalues_step, _ = np.linalg.eig(model.phi[1:])
+    if np.all(np.abs(eigenvalues_step) < 1):
+        print(f"Step {step}: Eigenvalues are within the unit circle. Model is stable.")
+    else:
+        print(f"Step {step}: Warning: Some eigenvalues are outside the unit circle. Model might be unstable.")
 
 # Alle voorspelde factoren samenvoegen
-all_predicted_factors = np.vstack([next_factors_step_1, next_factors_step_2, next_factors_step_3])
+all_predicted_factors = np.vstack(all_predicted_factors)
 
 # Zet de voorspelde factoren om naar een Pandas DataFrame voor export of verdere analyse
 predicted_factors_df = pd.DataFrame(all_predicted_factors, columns=[f"Factor_{i+1}" for i in range(num_factors)])
 
 # Debug: print de volledige set voorspelde factoren
-print(f"All predicted factors:\n{predicted_factors_df}")
+print(f"All predicted factors (for {num_steps} steps):\n{predicted_factors_df}")
+
+# Sla de voorspelde factoren op in een Excel-bestand
+output_excel_path = os.path.join(save_directory, 'factorforecasts5.xlsx')
+predicted_factors_df.to_excel(output_excel_path, index=False)
+print(f"Predicted factors saved to: {output_excel_path}")
