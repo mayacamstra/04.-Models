@@ -83,7 +83,7 @@ class DynamicFactorModel:
         Perform Yule-Walker estimation on the factors to fit a VAR model specifically for the 5 factors.
         """
         # We gebruiken alleen de 5 factoren om de VAR te schatten
-        factors_transposed = self.factors  # Vorm is nu (num_factors, num_time_points), dus (5, 300)
+        factors_transposed = self.factors.T  # Vorm is nu (num_factors, num_time_points), dus (5, 300)
 
         # Debug: Controleer de vorm van de getransponeerde factorenmatrix
         print(f"Shape of factors after transposition: {factors_transposed.shape}")
@@ -147,10 +147,15 @@ class DynamicFactorModel:
         """
         self.factor_extraction_func()  # Apply PCA or PLS based on the method
         self.yw_estimation()
-        self.B_mat, r2_insample, beta_const = self.enet_fit(data_train, self.factors.T)
+
+        # Gebruik alleen de meest recente factoren voor fitting (laatste tijdstap)
+        latest_factors = self.factors[-1:, :].T  # Vorm (num_factors, 1)
+
+        # Fit het ElasticNet model met de laatste factoren
+        self.B_mat, r2_insample, beta_const = self.enet_fit(data_train, latest_factors)
 
         if data_train_reg is not None:
-            C_matrix = self.autoregression(data_train_reg, self.factors.T, beta_const)
+            C_matrix = self.autoregression(data_train_reg, latest_factors, beta_const)
             return self.B_mat, C_matrix, r2_insample, beta_const
         else:
             return self.B_mat, r2_insample, beta_const
