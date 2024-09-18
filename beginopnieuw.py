@@ -58,7 +58,7 @@ print(f"Variance per variable (Y_train_std): {variance_per_variable}")
 
 # Define the number of factors to extract
 num_factors = 5  # Start met 5 factoren, je kunt dit later aanpassen
-num_steps = 3
+num_steps = 40    # Voorspel 40 stappen vooruit
 
 # Initialiseer het Dynamic Factor Model
 model = DynamicFactorModel(Y_train_std, num_factors)
@@ -84,62 +84,33 @@ print(f"Shape of B_matrix: {B_matrix.shape}")
 all_predicted_factors = []
 all_predicted_variables = []
 
-# --- Begin de iteratieve voorspelling ---
+# --- Begin de iteratieve voorspelling met een loop ---
 print("\n--- Iterative factor and variable prediction process ---")
 
-# Stap 1: Voorspel f_{t+1} en x_{t+1}
-print("Step 1: Forecasting the next time step")
-next_factors_t1 = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
-print(f"Shape of next_factors_t1: {next_factors_t1.shape}")
-
-# Bereken x_{t+1} met de voorspelde factoren en B-matrix
-predicted_x_t1 = np.dot(next_factors_t1, B_matrix) * std_train.T + mean_train.T
-print(f"Shape of predicted x_t+1: {predicted_x_t1.shape}")
-
-# Voeg de voorspelling toe aan de bestaande factoren en sla op
-model.factors = np.vstack([model.factors, next_factors_t1])
-all_predicted_factors.append(next_factors_t1)
-all_predicted_variables.append(predicted_x_t1)
-
-# Herbereken Yule-Walker voor de volgende stap
-model.yw_estimation()
-
-# Stap 2: Voorspel f_{t+2} en x_{t+2}
-print("Step 2: Forecasting the next time step")
-next_factors_t2 = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
-print(f"Shape of next_factors_t2: {next_factors_t2.shape}")
-
-# Bereken x_{t+2} met de voorspelde factoren en B-matrix
-predicted_x_t2 = np.dot(next_factors_t2, B_matrix) * std_train.T + mean_train.T
-print(f"Shape of predicted x_t+2: {predicted_x_t2.shape}")
-
-# Voeg de voorspelling toe aan de bestaande factoren en sla op
-model.factors = np.vstack([model.factors, next_factors_t2])
-all_predicted_factors.append(next_factors_t2)
-all_predicted_variables.append(predicted_x_t2)
-
-# Herbereken Yule-Walker voor de volgende stap
-model.yw_estimation()
-
-# Stap 3: Voorspel f_{t+3} en x_{t+3}
-print("Step 3: Forecasting the next time step")
-next_factors_t3 = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
-print(f"Shape of next_factors_t3: {next_factors_t3.shape}")
-
-# Bereken x_{t+3} met de voorspelde factoren en B-matrix
-predicted_x_t3 = np.dot(next_factors_t3, B_matrix) * std_train.T + mean_train.T
-print(f"Shape of predicted x_t+3: {predicted_x_t3.shape}")
-
-# Voeg de voorspelling toe aan de bestaande factoren en sla op
-model.factors = np.vstack([model.factors, next_factors_t3])
-all_predicted_factors.append(next_factors_t3)
-all_predicted_variables.append(predicted_x_t3)
+for step in range(1, num_steps + 1):
+    print(f"Step {step}: Forecasting the next time step")
+    
+    # Voorspel de volgende factoren f_{t+step}
+    next_factors = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
+    print(f"Shape of next_factors (step {step}): {next_factors.shape}")
+    
+    # Bereken x_{t+step} met de voorspelde factoren en B-matrix
+    predicted_x = np.dot(next_factors, B_matrix) * std_train.T + mean_train.T
+    print(f"Shape of predicted x_t+{step}: {predicted_x.shape}")
+    
+    # Voeg de voorspelling toe aan de bestaande factoren en sla op
+    model.factors = np.vstack([model.factors, next_factors])
+    all_predicted_factors.append(next_factors)
+    all_predicted_variables.append(predicted_x)
+    
+    # Herbereken Yule-Walker voor de volgende stap
+    model.yw_estimation()
 
 # Sla de voorspelde variabelen op in een Pandas DataFrame
 all_predicted_factors = np.vstack(all_predicted_factors)
 predicted_factors_df = pd.DataFrame(all_predicted_factors, columns=[f"Factor_{i+1}" for i in range(num_factors)])
 
-all_predicted_variables = np.vstack(all_predicted_variables) # Vorm (n_steps, 66)
+all_predicted_variables = np.vstack(all_predicted_variables)  # Vorm (n_steps, 66)
 predicted_variables_df = pd.DataFrame(all_predicted_variables, columns=[f"Variable_{i+1}" for i in range(all_predicted_variables.shape[1])])
 
 # Debug: print de volledige set voorspelde factoren en variabelen
