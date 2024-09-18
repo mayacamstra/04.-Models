@@ -80,24 +80,24 @@ class DynamicFactorModel:
 
     def yw_estimation(self):
         """
-        Perform Yule-Walker estimation on the factors to fit a VAR model.
+        Perform Yule-Walker estimation on the factors to fit a VAR model specifically for the 5 factors.
         """
-        # Debug: Check the shape of factors before transposition
-        print(f"Shape of factors before VAR: {self.factors.shape}")
+        # We gebruiken alleen de 5 factoren om de VAR te schatten
+        factors_transposed = self.factors  # Vorm is nu (num_factors, num_time_points), dus (5, 300)
 
-        # Transponeer de factorenmatrix om de juiste dimensies te krijgen (num_factors, num_time_points)
-        factors_transposed = self.factors.T  # Maak de matrix (5, 300)
-
-        # Debug: Controleer de nieuwe vorm
+        # Debug: Controleer de vorm van de getransponeerde factorenmatrix
         print(f"Shape of factors after transposition: {factors_transposed.shape}")
 
-        # Nu passen we het VAR-model toe op de getransponeerde factoren
+        # Nu passen we het VAR-model toe op de getransponeerde factoren om de Phi-matrix te krijgen
         model = sm.tsa.VAR(factors_transposed)
-        results = model.fit(1)
-        self.phi = results.params
+        results = model.fit(1)  # We schatten een VAR(1) model
 
-        # Debug: Print de geschatte phi-matrix
+        # Sla alleen de relevante autoregressieve parameters op
+        self.phi = results.params  # Vorm van phi is nu (num_factors + 1, num_factors), dus (6, 5)
+        
+        # Debug: Print de nieuwe Phi-matrix en de vorm
         print(f"Yule-Walker estimation (phi matrix):\n{self.phi}")
+        print(f"Shape of phi matrix: {self.phi.shape}")
 
     def enet_fit(self, data_train, fac_train):
         """
@@ -157,31 +157,46 @@ class DynamicFactorModel:
 
     def factor_forecast(self, num_steps=1):
         """
-        Forecast future factors based on the estimated Yule-Walker parameters.
+        Forecast future factors based on the estimated Yule-Walker parameters, now focusing on 5 factors.
         
         Parameters:
-        num_steps (int): Number of time steps to forecast.
+        num_steps (int): Number of steps to forecast (default is 1).
 
         Returns:
-        np.ndarray: Forecasted factors for the given number of steps.
+        np.ndarray: Predicted factors for the next time step.
         """
-        # Pak de laatste kolom van de factoren (dit is de huidige toestand)
-        last_factors = self.factors[:, -1]
-        
-        # Zorg ervoor dat Phi zonder intercept wordt gebruikt
-        phi = self.phi[1:].T
-        intercept = self.phi[0]
+        # Start met de laatste rij van de factoren (meest recente factoren)
+        current_factors = self.factors[-1]  # Dit is een rij van vorm (num_factors,)
 
-        # Lijst om de voorspelde factoren op te slaan
-        forecasted_factors = []
+        # Debug: Print de huidige vorm van current_factors
+        print(f"Shape of current_factors: {current_factors.shape}")
 
-        # Voorspel de toekomstige factoren stap voor stap
-        for step in range(num_steps):
-            # Voer de matrixvermenigvuldiging uit: phi * last_factors + intercept
-            next_factors = np.dot(phi, last_factors) + intercept
-            forecasted_factors.append(next_factors)
+        # Phi moet nu de vorm (5, 5) hebben voor de autoregressieve parameters
+        phi = self.phi[1:].T  # De eerste rij is de intercept, dus we gebruiken vanaf de tweede rij
+
+        # Debug: Print de vorm van de Phi-matrix
+        print(f"Shape of phi matrix used for forecasting: {phi.shape}")
+
+        # Intercept is de eerste rij van de Phi-matrix (vorm is (5,))
+        intercept = self.phi[0]  
+
+        # Debug: Print de vorm van de intercept
+        print(f"Shape of intercept: {intercept.shape}")
+
+        predicted_factors = []
+
+        # Voorspel voor het aantal gewenste stappen (meestal 1 stap)
+        for _ in range(num_steps):
+            # Bereken de volgende factoren door de huidige factoren met Phi te vermenigvuldigen
+            next_factors = np.dot(phi, current_factors) + intercept
+
+            # Debug: Print de vorm van next_factors
+            print(f"Shape of next_factors: {next_factors.shape}")
             
-            # De nieuwe voorspelling wordt de huidige toestand voor de volgende stap
-            last_factors = next_factors
+            predicted_factors.append(next_factors)
+            
+            # Update de huidige factoren voor de volgende iteratie (indien meerdere stappen nodig zijn)
+            current_factors = next_factors
 
-        return np.array(forecasted_factors)
+        # Return de voorspelling als een 2D-array (num_steps, num_factors)
+        return np.array(predicted_factors).reshape(num_steps, -1)
