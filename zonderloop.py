@@ -1,10 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
-from data_loader import load_data, filter_data
-from utils import RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
-from factor_model_try import DynamicFactorModel
-from individual_model_try import IndividualModel
+from sklearn.linear_model import LinearRegression
 
 # Zorg ervoor dat de directory bestaat waar we de resultaten gaan opslaan
 save_directory = r"C:\Thesis\04. Models\PCAstatic"  # Map waar je de Excel-bestanden wil opslaan
@@ -16,6 +13,16 @@ os.makedirs(plot_dir, exist_ok=True)
 
 # Load and filter data
 file_path = 'C:/Thesis/03. Data/Final version data/Static.xlsx'
+
+# Functie om data te laden, stel voor dat dit werkt zoals je eerdere code
+def load_data(file_path):
+    return pd.read_excel(file_path, index_col=0)
+
+# Functie om data te filteren, stel voor dat deze werkt zoals in je eerdere code
+def filter_data(df):
+    # Placeholder filterfunctie
+    return df
+
 df_data = load_data(file_path)
 print(f"Data loaded from {file_path}, shape: {df_data.shape}")
 
@@ -56,61 +63,109 @@ print(f"First 5 rows of Y_train_std after standardization:\n{Y_train_std[:5, :5]
 variance_per_variable = np.var(Y_train_std, axis=1)
 print(f"Variance per variable (Y_train_std): {variance_per_variable}")
 
-# --- Voorspelling van factoren en variabelen ---
-num_factors = 5  # Aantal te extraheren factoren
-num_steps = 40  # Aantal tijdstappen om vooruit te voorspellen
+# ---- Bereken de factoren via PCA ----
+from sklearn.decomposition import PCA
 
-# Initialiseer het Dynamic Factor Model
-model = DynamicFactorModel(Y_train_std, num_factors)
-model.apply_pca()  # Extract factors
-model.yw_estimation()  # Estimate Phi matrix with Yule-Walker
-
-# Initialiseer het Individual Model
-ind_model = IndividualModel(Y_train_std, num_factors)
-
-# Bereken de B-matrix op basis van de training set
-B_matrix, _, _, _ = ind_model.train(Y_train_std.T, None)
+num_factors = 5  # We willen 5 factoren extraheren
+pca = PCA(n_components=num_factors)
+factors = pca.fit_transform(Y_train_std.T)  # PCA toegepast op de transpositie van de data
 
 # Debug: Print de vorm van de geëxtraheerde factoren
-print(f"Shape of extracted factors: {model.factors.shape}")
+print(f"Shape of extracted factors from PCA: {factors.shape}")  # (300, 5)
 
-# --- Stap 1: Voorspel f_{t+1} en x_{t+1} ---
-print("\n--- Step 1: Predict f_{t+1} and x_{t+1} ---")
+# --- Voer Yule-Walker schatting uit ---
+from statsmodels.tsa.vector_ar.var_model import VAR
 
-# Voorspel f_{t+1} met de laatste beschikbare factoren
-next_factors_t1 = model.factor_forecast(num_steps=1)
-print(f"Predicted factors for t+1: {next_factors_t1.shape}")
+# We gebruiken een VAR-model om de autoregressieve structuur (phi-matrix) van de factoren te bepalen
+var_model = VAR(factors)
+var_results = var_model.fit(maxlags=1)  # We gebruiken een VAR(1) model
+phi_matrix = var_results.coefs[0]  # Dit is de phi-matrix van de VAR(1)
+intercept = var_results.intercept  # De intercept van het model
 
-# Bereken x_{t+1} met de voorspelde factoren en B-matrix
-predicted_x_t1 = np.dot(next_factors_t1, B_matrix.T) * std_train.T + mean_train.T
-print(f"Predicted x_{t+1} variables: {predicted_x_t1.shape}")
+# Debug: Print de phi-matrix
+print(f"Yule-Walker estimation (phi matrix):\n{phi_matrix}")
+print(f"Intercept:\n{intercept}")
 
-# Voeg de voorspelde variabelen x_{t+1} toe aan de dataset
-Y_extended_t1 = np.hstack([Y_train_std, predicted_x_t1.T])
-print(f"Shape of Y_extended after adding x_{t+1}: {Y_extended_t1.shape}")
+# ---- Bereken de B-matrix via lineaire regressie ----
+# We gaan nu de B-matrix berekenen door lineaire regressie van de factoren op de originele variabelen.
 
-# --- Stap 2: Voorspel f_{t+2} en x_{t+2} ---
-print("\n--- Step 2: Predict f_{t+2} and x_{t+2} ---")
+# Gebruik gestandaardiseerde data en de factoren om de regressie te doen
+B_matrix = np.zeros((Y_train_std.shape[0], num_factors))
 
-# Standaardiseer de uitgebreide dataset met x_{t+1}
-Y_extended_t1_std = (Y_extended_t1 - mean_train) / std_train
+# Voor elke variabele in Y_train_std passen we een lineaire regressie toe
+for i in range(Y_train_std.shape[0]):
+    # Lineaire regressie: Y_train_std[i, :] = B * factors.T
+    reg = LinearRegression()
+    reg.fit(factors, Y_train_std[i, :])
+    B_matrix[i, :] = reg.coef_
 
-# Update het DynamicFactorModel met de nieuwe gestandaardiseerde data
-model.std_data = Y_extended_t1_std  # Update model data
-model.apply_pca()  # Extract factors for the new data
-model.yw_estimation()  # Re-estimate Phi matrix
+# Debug: Print de B-matrix
+print(f"Shape of B_matrix: {B_matrix.shape}")
 
-# Voorspel f_{t+2} met de laatste beschikbare factoren
-next_factors_t2 = model.factor_forecast(num_steps=1)
-print(f"Predicted factors for t+2: {next_factors_t2.shape}")
+# ---- Begin de iteratieve voorspelling voor 3 stappen vooruit ----
+def predict_factors(factors_current, phi_matrix, intercept):
+    return np.dot(factors_current, phi_matrix.T) + intercept
 
-# Bereken x_{t+2} met de voorspelde factoren en B-matrix
-predicted_x_t2 = np.dot(next_factors_t2, B_matrix.T) * std_train.T + mean_train.T
-print(f"Predicted x_{t+2} variables: {predicted_x_t2.shape}")
+def predict_variables(factors_next, B_matrix, mean_train, std_train):
+    # Bereken voorspelde variabelen op basis van f_{t+1} en B-matrix
+    predicted_x = np.dot(factors_next, B_matrix.T) * std_train.T + mean_train.T
+    return predicted_x
 
-# Voeg de voorspelde variabelen x_{t+2} toe aan de dataset
-Y_extended_t2 = np.hstack([Y_extended_t1, predicted_x_t2.T])
-print(f"Shape of Y_extended after adding x_{t+2}: {Y_extended_t2.shape}")
+# Lijsten om de voorspelde factoren en variabelen op te slaan
+all_predicted_factors = []
+all_predicted_variables = []
 
-# --- Eindresultaat ---
-# Je hebt nu de voorspelde variabelen voor t+1 en t+2 berekend en toegevoegd aan de dataset.
+# Stap 1: Voorspel de eerste tijdstap vooruit
+print("Step 1: Forecasting the next time step")
+factors_t1 = predict_factors(factors[-1, :], phi_matrix, intercept)
+print(f"Predicted factors (f_{t+1}): {factors_t1}")
+
+# Voorspel de variabelen x_{t+1}
+predicted_x_t1 = predict_variables(factors_t1, B_matrix, mean_train, std_train)
+print(f"Predicted variables (x_{t+1}): {predicted_x_t1}")
+
+# Sla op in de lijsten
+all_predicted_factors.append(factors_t1)
+all_predicted_variables.append(predicted_x_t1)
+
+# Stap 2: Voorspel de tweede tijdstap vooruit
+print("Step 2: Forecasting the next time step")
+factors_t2 = predict_factors(factors_t1, phi_matrix, intercept)
+print(f"Predicted factors (f_{t+2}): {factors_t2}")
+
+# Voorspel de variabelen x_{t+2}
+predicted_x_t2 = predict_variables(factors_t2, B_matrix, mean_train, std_train)
+print(f"Predicted variables (x_{t+2}): {predicted_x_t2}")
+
+# Sla op in de lijsten
+all_predicted_factors.append(factors_t2)
+all_predicted_variables.append(predicted_x_t2)
+
+# Stap 3: Voorspel de derde tijdstap vooruit
+print("Step 3: Forecasting the next time step")
+factors_t3 = predict_factors(factors_t2, phi_matrix, intercept)
+print(f"Predicted factors (f_{t+3}): {factors_t3}")
+
+# Voorspel de variabelen x_{t+3}
+predicted_x_t3 = predict_variables(factors_t3, B_matrix, mean_train, std_train)
+print(f"Predicted variables (x_{t+3}): {predicted_x_t3}")
+
+# Sla op in de lijsten
+all_predicted_factors.append(factors_t3)
+all_predicted_variables.append(predicted_x_t3)
+
+# --- Opslaan van de resultaten ---
+# Zet de voorspelde factoren om naar een Pandas DataFrame voor export of verdere analyse
+predicted_factors_df = pd.DataFrame(all_predicted_factors, columns=[f"Factor_{i+1}" for i in range(num_factors)])
+predicted_variables_df = pd.DataFrame(np.vstack(all_predicted_variables).T, index=Y_train.index)
+
+# Debug: print de volledige set voorspelde factoren en variabelen
+print(f"All predicted factors:\n{predicted_factors_df}")
+print(f"All predicted variables:\n{predicted_variables_df}")
+
+# Sla de voorspelde factoren en variabelen op in Excel-bestanden
+predicted_factors_df.to_excel(os.path.join(save_directory, 'predicted_factors.xlsx'), index=False)
+predicted_variables_df.to_excel(os.path.join(save_directory, 'predicted_variables.xlsx'), index=False)
+
+print(f"Predicted factors saved to: {os.path.join(save_directory, 'predicted_factors.xlsx')}")
+print(f"Predicted variables saved to: {os.path.join(save_directory, 'predicted_variables.xlsx')}")
