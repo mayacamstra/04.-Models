@@ -7,7 +7,6 @@ from PCA_model import apply_pca
 from PLS_model import PLSModel
 from utils import standardize
 from datetime import datetime
-
 class DynamicFactorModel:
     def __init__(self, df_data, num_factors, method='PCA'):
         
@@ -25,7 +24,6 @@ class DynamicFactorModel:
         self.B_mat = None
         self.model_ena = None
         self.pca_model = None
-
         if method == 'PCA':
             self.factor_extraction_func = self.apply_pca
         elif method == 'PLS':
@@ -33,23 +31,18 @@ class DynamicFactorModel:
             self.factor_extraction_func = self.apply_pls
         else:
             raise ValueError("Method must be 'PCA' or 'PLS'")
-
     def apply_pca(self):
         """
         Apply Principal Component Analysis (PCA) to extract factors.
         """
         # Ontvang zowel de factoren als het PCA-model van apply_pca
         self.factors, self.pca_model = apply_pca(self.std_data.T, self.num_factors, return_model=True)
-
-
     def apply_pls(self, X, Y):
         """
         Apply PLS regression to extract factors.
-
         Parameters:
         X (np.ndarray): Input data for PLS.
         Y (np.ndarray): Output data for PLS (often the same as X for unsupervised factor extraction).
-
         Returns:
         np.ndarray: The extracted factors.
         """
@@ -57,16 +50,13 @@ class DynamicFactorModel:
         
         # Debug: Check if factors are 2D after PLS
         print(f"Shape of PLS factors: {self.factors.shape}")
-
         # Ensure the factors remain 2D, if necessary reshape or transpose
         if len(self.factors.shape) == 1:
             self.factors = self.factors.reshape(-1, 1)  # Ensure it's at least 2D
         return self.factors
-
     def transform(self, X):
         """
         Transform the data using the fitted PLS model.
-
         Parameters:
         X (np.ndarray): Input data to transform using the fitted PLS model.
         
@@ -83,7 +73,7 @@ class DynamicFactorModel:
         Perform Yule-Walker estimation on the factors to fit a VAR model specifically for the 5 factors.
         """
         # We gebruiken alleen de 5 factoren om de VAR te schatten
-        factors_transposed = self.factors.T  # Vorm is nu (num_factors, num_time_points), dus (5, 300)
+        factors_transposed = self.factors  # Vorm is nu (num_factors, num_time_points), dus (5, 300)
 
         # Debug: Controleer de vorm van de getransponeerde factorenmatrix
         print(f"Shape of factors after transposition: {factors_transposed.shape}")
@@ -147,15 +137,10 @@ class DynamicFactorModel:
         """
         self.factor_extraction_func()  # Apply PCA or PLS based on the method
         self.yw_estimation()
-
-        # Gebruik alleen de meest recente factoren voor fitting (laatste tijdstap)
-        latest_factors = self.factors[-1:, :].T  # Vorm (num_factors, 1)
-
-        # Fit het ElasticNet model met de laatste factoren
-        self.B_mat, r2_insample, beta_const = self.enet_fit(data_train, latest_factors)
+        self.B_mat, r2_insample, beta_const = self.enet_fit(data_train, self.factors.T)
 
         if data_train_reg is not None:
-            C_matrix = self.autoregression(data_train_reg, latest_factors, beta_const)
+            C_matrix = self.autoregression(data_train_reg, self.factors.T, beta_const)
             return self.B_mat, C_matrix, r2_insample, beta_const
         else:
             return self.B_mat, r2_insample, beta_const
@@ -170,7 +155,7 @@ class DynamicFactorModel:
         Returns:
         np.ndarray: Predicted factors for the next time step.
         """
-        # Start met de laatste rij van de factoren (meest recente factoren)
+       # Start met de laatste rij van de factoren (meest recente factoren)
         current_factors = self.factors[-1]  # Dit is een rij van vorm (num_factors,)
 
         # Debug: Print de huidige vorm van current_factors
@@ -197,7 +182,7 @@ class DynamicFactorModel:
 
             # Debug: Print de vorm van next_factors
             print(f"Shape of next_factors: {next_factors.shape}")
-            
+
             predicted_factors.append(next_factors)
             
             # Update de huidige factoren voor de volgende iteratie (indien meerdere stappen nodig zijn)
