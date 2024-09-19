@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
 from utils import RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model_try import DynamicFactorModel
+from sklearn.linear_model import MultiTaskElasticNetCV
+from sklearn.metrics import r2_score
 
 # Zorg ervoor dat de directory bestaat waar we de resultaten gaan opslaan
 save_directory = r"C:\Thesis\04. Models\PCAstatic"  # Map waar je de Excel-bestanden wil opslaan
@@ -46,6 +48,21 @@ num_steps = 40    # Voorspel 40 stappen vooruit
 all_predicted_factors = []
 all_predicted_variables = []
 
+# ElasticNet functie om de B-matrix te schatten
+def fit_elastic_net(data, factors):
+    """
+    Fit ElasticNet to the data to estimate the B-matrix.
+    :param data: Input data (dependent variable matrix), shape (n_samples, n_variables)
+    :param factors: Factors (independent variables), shape (n_samples, n_factors)
+    :return: B_matrix (coefficients), intercept, R² score (for in-sample fit)
+    """
+    enet = MultiTaskElasticNetCV(cv=5, random_state=0)
+    enet.fit(factors, data)
+    B_matrix = enet.coef_
+    intercept = enet.intercept_
+    r2_in_sample = enet.score(factors, data)  # R² score to evaluate the fit
+    return B_matrix, intercept, r2_in_sample
+
 # --- Begin de iteratieve voorspelling met een loop ---
 print("\n--- Iterative factor and variable prediction process ---")
 
@@ -63,9 +80,15 @@ for step in range(1, num_steps + 1):
     model.apply_pca()
     model.yw_estimation()
     
-    # --- Stap 3: Bereken de B-matrix voor de voorspelling van variabelen ---
+    # --- Stap 3: Bereken de B-matrix met ElasticNet ---
     factors_train = model.factors.T  # (num_factors, aantal observaties)
-    B_matrix = np.linalg.lstsq(factors_train.T, input_std.T, rcond=None)[0]  # Shape (num_factors, aantal variabelen)
+    
+    # Debugging: Bekijk de vormen van de input voor ElasticNet
+    print(f"Shape of input_std.T (data): {input_std.T.shape}")  # Verwacht (300, 66)
+    print(f"Shape of factors_train: {factors_train.shape}")     # Verwacht (300, 5)
+        
+    B_matrix, intercept, r2_in_sample = fit_elastic_net(input_std.T, factors_train.T)
+    print(f"ElasticNet in-sample R²: {r2_in_sample}")
     
     # --- Stap 4: Voorspel de volgende factoren en variabelen ---
     next_factors = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
