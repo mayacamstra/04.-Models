@@ -92,7 +92,7 @@ for step in range(1, num_steps + 1):
     
     # --- Stap 4: Voorspel de volgende factoren en variabelen ---
     next_factors = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
-    predicted_x = np.dot(next_factors, B_matrix) * std_train.T + mean_train.T
+    predicted_x = np.dot(next_factors, B_matrix.T) * std_train.T + mean_train.T
     
     # --- Stap 5: Voeg de voorspelde data toe aan de inputdataset ---
     # Voeg de voorspelde variabelen als nieuwe kolom toe
