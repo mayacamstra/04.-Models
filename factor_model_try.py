@@ -86,7 +86,7 @@ class DynamicFactorModel:
         self.phi = results.params  # Vorm van phi is nu (num_factors + 1, num_factors), dus (6, 5)
         
         # Debug: Print de nieuwe Phi-matrix en de vorm
-        print(f"Yule-Walker estimation (phi matrix):\n{self.phi}")
+        # print(f"Yule-Walker estimation (phi matrix):\n{self.phi}")
         print(f"Shape of phi matrix: {self.phi.shape}")
 
     def enet_fit(self, data_train, fac_train):

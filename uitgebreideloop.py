@@ -63,46 +63,66 @@ def fit_elastic_net(data, factors):
     r2_in_sample = enet.score(factors, data)  # R² score to evaluate the fit
     return B_matrix, intercept, r2_in_sample
 
-# --- Begin de iteratieve voorspelling met een loop ---
-print("\n--- Iterative factor and variable prediction process ---")
+# --- Uitvoeren van stap 1 (volledige eerste iteratie inclusief B-matrix berekening) ---
+print("\n--- Step 1: Full process including B-matrix estimation ---")
 
-for step in range(1, num_steps + 1):
+# --- Stap 1: Standaardiseer de inputdataset ---
+mean_train = np.mean(input_dataset.values, axis=1, keepdims=True)
+std_train = np.std(input_dataset.values, axis=1, keepdims=True)
+input_std = (input_dataset.values - mean_train) / std_train
+input_std_df = pd.DataFrame(input_std, index=input_dataset.index, columns=input_dataset.columns)
+
+# --- Stap 2: Initialiseer en pas Dynamic Factor Model toe ---
+model = DynamicFactorModel(input_std_df, num_factors)
+model.apply_pca()
+model.yw_estimation()
+
+# --- Stap 3: Bereken de B-matrix met ElasticNet ---
+factors_train = model.factors.T  # (num_factors, aantal observaties)
+B_matrix, intercept, r2_in_sample = fit_elastic_net(input_std.T, factors_train.T)
+print(f"ElasticNet in-sample R²: {r2_in_sample}")
+
+# --- Stap 4: Voorspel de volgende factoren en variabelen ---
+next_factors = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
+predicted_x = np.dot(next_factors, B_matrix.T) * std_train.T + mean_train.T
+
+# --- Stap 5: Voeg de voorspelde data toe aan de inputdataset ---
+new_col = pd.DataFrame(predicted_x.T, index=input_dataset.index, columns=[f"Predicted_1"])
+input_dataset = pd.concat([input_dataset, new_col], axis=1)
+
+# Sla de voorspelde factoren en variabelen op
+all_predicted_factors.append(next_factors)
+all_predicted_variables.append(predicted_x)
+
+# --- Iteratieve stappen 2 t/m 40 zonder het opnieuw berekenen van de B-matrix ---
+print("\n--- Steps 2 to 40: Iterative process using the fixed B-matrix ---")
+
+for step in range(2, num_steps + 1):
     print(f"Step {step}: Forecasting the next time step")
     
-    # --- Stap 1: Standaardiseer de inputdataset ---
+    # --- Standaardiseer de inputdataset ---
     mean_train = np.mean(input_dataset.values, axis=1, keepdims=True)
     std_train = np.std(input_dataset.values, axis=1, keepdims=True)
     input_std = (input_dataset.values - mean_train) / std_train
     input_std_df = pd.DataFrame(input_std, index=input_dataset.index, columns=input_dataset.columns)
     
-    # --- Stap 2: Initialiseer en pas Dynamic Factor Model toe ---
+    # --- Initialiseer en pas Dynamic Factor Model toe ---
     model = DynamicFactorModel(input_std_df, num_factors)
     model.apply_pca()
     model.yw_estimation()
     
-    # --- Stap 3: Bereken de B-matrix met ElasticNet ---
-    factors_train = model.factors.T  # (num_factors, aantal observaties)
-    
-    # Debugging: Bekijk de vormen van de input voor ElasticNet
-    print(f"Shape of input_std.T (data): {input_std.T.shape}")  # Verwacht (300, 66)
-    print(f"Shape of factors_train: {factors_train.shape}")     # Verwacht (300, 5)
-        
-    B_matrix, intercept, r2_in_sample = fit_elastic_net(input_std.T, factors_train.T)
-    print(f"ElasticNet in-sample R²: {r2_in_sample}")
-    
-    # --- Stap 4: Voorspel de volgende factoren en variabelen ---
+    # --- Voorspel de volgende factoren en variabelen (gebruik vastgezette B-matrix) ---
     next_factors = model.factor_forecast(num_steps=1)  # Voorspel 1 tijdstap vooruit
     predicted_x = np.dot(next_factors, B_matrix.T) * std_train.T + mean_train.T
     
-    # --- Stap 5: Voeg de voorspelde data toe aan de inputdataset ---
-    # Voeg de voorspelde variabelen als nieuwe kolom toe
+    # --- Voeg de voorspelde data toe aan de inputdataset ---
     new_col = pd.DataFrame(predicted_x.T, index=input_dataset.index, columns=[f"Predicted_{step}"])
     input_dataset = pd.concat([input_dataset, new_col], axis=1)
 
     # Sla de voorspelde factoren en variabelen op
     all_predicted_factors.append(next_factors)
     all_predicted_variables.append(predicted_x)
-    
+
     # Herbereken Yule-Walker voor de volgende stap (gebaseerd op de nieuwe dataset)
     model.yw_estimation()
 
@@ -130,3 +150,5 @@ print(f"Predicted variables saved to: {variables_output_path}")
 train_output_path = os.path.join(save_directory, 'Y_train_expanded_lange_loop.xlsx')
 input_dataset.to_excel(train_output_path)
 print(f"Expanded Y_train saved to: {train_output_path}")
+print(f"ElasticNet in-sample R²: {r2_in_sample}")
+
