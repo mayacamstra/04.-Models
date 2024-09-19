@@ -122,17 +122,20 @@ for split in range(n_splits):
     factors_test = model.factors[:Y_test_std.shape[1]].T  # Pak de factoren voor de testperiode
     
     # Controleer de dimensies voordat we vermenigvuldigen
-    print(f"Shape of factors_test: {factors_test.shape}")  # Verwacht (60, num_factors)
+    print(f"Shape of factors_test: {factors_test.T.shape}")  # Verwacht (60, num_factors)
     print(f"Shape of B_matrix.T: {B_matrix.T.shape}")  # Verwacht (num_factors, 66)
 
-    Y_test_predicted = np.dot(factors_test, B_matrix.T) * std_test.T + mean_test.T
+    Y_test_predicted = np.dot(factors_test.T, B_matrix.T) * std_test.T + mean_test.T
     
     # Debugging: Check de vorm
     print(f"Shape of Y_test_predicted: {Y_test_predicted.shape}")  # Check of deze overeenkomt met Y_test_std
     print(f"Shape of Y_test_std: {Y_test_std.shape}")  # Test set shape
     
+    # Zorg ervoor dat Y_test_std dezelfde vorm heeft als Y_test_predicted
+    Y_test_std = Y_test_std.T  # Transponeer Y_test_std zodat het (60, 66) wordt
+    
     # Gebruik de eigen R²-functie
-    r2_test = custom_r2_score(Y_test_std.T, Y_test_predicted.T)
+    r2_test = custom_r2_score(Y_test_std, Y_test_predicted)
     print(f"R² on test set for split {split + 1}: {r2_test}")
     r2_out_sample_scores.append(r2_test)
 
