@@ -159,19 +159,19 @@ class DynamicFactorModel:
         current_factors = self.factors[-1]  # Dit is een rij van vorm (num_factors,)
 
         # Debug: Print de huidige vorm van current_factors
-        print(f"Shape of current_factors: {current_factors.shape}")
+        # print(f"Shape of current_factors: {current_factors.shape}")
 
         # Phi moet nu de vorm (5, 5) hebben voor de autoregressieve parameters
         phi = self.phi[1:].T  # De eerste rij is de intercept, dus we gebruiken vanaf de tweede rij
 
         # Debug: Print de vorm van de Phi-matrix
-        print(f"Shape of phi matrix used for forecasting: {phi.shape}")
+        # print(f"Shape of phi matrix used for forecasting: {phi.shape}")
 
         # Intercept is de eerste rij van de Phi-matrix (vorm is (5,))
         intercept = self.phi[0]  
 
         # Debug: Print de vorm van de intercept
-        print(f"Shape of intercept: {intercept.shape}")
+        # print(f"Shape of intercept: {intercept.shape}")
 
         predicted_factors = []
 
@@ -181,7 +181,7 @@ class DynamicFactorModel:
             next_factors = np.dot(phi, current_factors) + intercept
 
             # Debug: Print de vorm van next_factors
-            print(f"Shape of next_factors: {next_factors.shape}")
+            # print(f"Shape of next_factors: {next_factors.shape}")
 
             predicted_factors.append(next_factors)
             

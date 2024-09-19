@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from data_loader import load_data, filter_data
-from utils import RMSE, calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
+from utils import calculate_r2, calculate_aic_bic, log_likelihood, adjusted_r2
 from factor_model_try import DynamicFactorModel
 from sklearn.linear_model import MultiTaskElasticNetCV
 from sklearn.metrics import r2_score
@@ -37,8 +37,18 @@ Y_validate = filtered_df.loc[:, DATE_VALIDATE_START:DATE_VALIDATE_END]  # Data f
 print(f"Y_train shape: {Y_train.shape} (expected: 66 variables x ~300 months)")
 print(f"Y_validate shape: {Y_validate.shape} (expected: 66 variables x ~47 months)")
 
-# Initialiseer de lijst met de inputdataset, dit bevat de initiële Y_train
-input_dataset = Y_train.copy()
+# --- Splits de Y_train in een 80%-20% train-test split ---
+train_size = int(0.8 * Y_train.shape[1])  # Bereken 80% van het aantal maanden
+
+# 80% train en 20% test sets
+Y_train_split = Y_train.iloc[:, :train_size]  # Eerste 80% van de data
+Y_test_split = Y_train.iloc[:, train_size:]  # Laatste 20% van de data
+
+print(f"Train set shape: {Y_train_split.shape}")
+print(f"Test set shape: {Y_test_split.shape}")
+
+# --- Gebruik de eerste 80% voor modeltraining ---
+input_dataset = Y_train_split.copy()
 
 # Define the number of factors to extract
 num_factors = 5  # Start met 5 factoren, je kunt dit later aanpassen
@@ -134,8 +144,8 @@ all_predicted_variables = np.vstack(all_predicted_variables)
 predicted_variables_df = pd.DataFrame(all_predicted_variables, columns=[f"Variable_{i+1}" for i in range(all_predicted_variables.shape[1])])
 
 # Debug: print de volledige set voorspelde factoren en variabelen
-print(f"All predicted factors:\n{predicted_factors_df}")
-print(f"All predicted variables:\n{predicted_variables_df}")
+# print(f"All predicted factors:\n{predicted_factors_df}")
+# print(f"All predicted variables:\n{predicted_variables_df}")
 
 # Sla de voorspelde factoren en variabelen op als Excel-bestand voor verder gebruik
 factor_output_path = os.path.join(save_directory, 'predicted_factors_lange_loop.xlsx')
@@ -150,5 +160,32 @@ print(f"Predicted variables saved to: {variables_output_path}")
 train_output_path = os.path.join(save_directory, 'Y_train_expanded_lange_loop.xlsx')
 input_dataset.to_excel(train_output_path)
 print(f"Expanded Y_train saved to: {train_output_path}")
-print(f"ElasticNet in-sample R²: {r2_in_sample}")
 
+# --- Evaluatie van het model op de 20% test set ---
+print("\n--- Evaluating on the 20% test set ---")
+
+# Functie voor RMSE
+def RMSE(y_true, y_pred):
+    """
+    Calculate the Root Mean Squared Error (RMSE) between the true values and the predicted values.
+    :param y_true: Ground truth (correct) target values.
+    :param y_pred: Estimated target values.
+    :return: RMSE value.
+    """
+    return np.sqrt(np.mean((y_true - y_pred) ** 2))
+
+# Standaardiseer de test dataset op basis van de mean en std van de train set
+mean_train = np.mean(Y_train_split.values, axis=1, keepdims=True)
+std_train = np.std(Y_train_split.values, axis=1, keepdims=True)
+Y_test_std = (Y_test_split.values - mean_train) / std_train
+
+# Voorspel de test set variabelen met de vaste B-matrix en factoren
+factors_test = model.factors.T  # Test factoren
+Y_test_predicted = np.dot(factors_test, B_matrix.T) * std_train.T + mean_train.T
+
+# Bereken de RMSE en R² op de test set
+rmse_test = RMSE(Y_test_std, Y_test_predicted)
+r2_test = r2_score(Y_test_std, Y_test_predicted)
+
+print(f"RMSE on test set: {rmse_test}")
+print(f"R² on test set: {r2_test}")
