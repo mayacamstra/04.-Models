@@ -174,18 +174,4 @@ def RMSE(y_true, y_pred):
     """
     return np.sqrt(np.mean((y_true - y_pred) ** 2))
 
-# Standaardiseer de test dataset op basis van de mean en std van de train set
-mean_train = np.mean(Y_train_split.values, axis=1, keepdims=True)
-std_train = np.std(Y_train_split.values, axis=1, keepdims=True)
-Y_test_std = (Y_test_split.values - mean_train) / std_train
 
-# Voorspel de test set variabelen met de vaste B-matrix en factoren
-factors_test = model.factors.T  # Test factoren
-Y_test_predicted = np.dot(factors_test, B_matrix.T) * std_train.T + mean_train.T
-
-# Bereken de RMSE en R² op de test set
-rmse_test = RMSE(Y_test_std, Y_test_predicted)
-r2_test = r2_score(Y_test_std, Y_test_predicted)
-
-print(f"RMSE on test set: {rmse_test}")
-print(f"R² on test set: {r2_test}")
